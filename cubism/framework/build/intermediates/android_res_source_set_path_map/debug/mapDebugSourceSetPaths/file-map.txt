@@ -1,0 +1,9 @@
+com.live2d.sdk.cubism.framework-pngs-0 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/generated/res/pngs/debug
+com.live2d.sdk.cubism.framework-updated_navigation_xml-1 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/generated/updated_navigation_xml/debug
+com.live2d.sdk.cubism.framework-mergeDebugResources-2 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/intermediates/incremental/debug/mergeDebugResources/merged.dir
+com.live2d.sdk.cubism.framework-mergeDebugResources-3 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/intermediates/incremental/debug/mergeDebugResources/stripped.dir
+com.live2d.sdk.cubism.framework-debug-4 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/intermediates/merged_res/debug/mergeDebugResources
+com.live2d.sdk.cubism.framework-debug-5 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/intermediates/packaged_res/debug/packageDebugResources
+com.live2d.sdk.cubism.framework-debug-6 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/src/debug/res
+com.live2d.sdk.cubism.framework-main-7 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/src/main/res
+gradleHome-0 /home/sihoo/.gradle

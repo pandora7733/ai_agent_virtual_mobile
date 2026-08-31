@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace = "com.live2d.sdk.cubism.framework"
+    compileSdk 37
+
+    defaultConfig {
+        minSdk 24
+        targetSdk 37
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+dependencies {
+    compileOnly files("$rootDir/cubism/core/android/Live2DCubismCore.aar")
+
+    testImplementation 'junit:junit:4.13.2'
+}
