@@ -49,9 +49,7 @@ public class LAppMinimumPal {
 
     // ファイルをバイト列として読み込む
     public static byte[] loadFileAsBytes(final String path) {
-        InputStream fileData = null;
-        try {
-            fileData = LAppMinimumDelegate.getInstance().getActivity().getAssets().open(path);
+        try (InputStream fileData = LAppMinimumDelegate.getInstance().getActivity().getAssets().open(path)) {
 
             int fileSize = fileData.available();
             byte[] fileBuffer = new byte[fileSize];
@@ -66,16 +64,6 @@ public class LAppMinimumPal {
             }
 
             return new byte[0];
-        } finally {
-            try {
-                fileData.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-
-                if (LAppDefine.DEBUG_LOG_ENABLE) {
-                    printLog("File open error.");
-                }
-            }
         }
     }
 

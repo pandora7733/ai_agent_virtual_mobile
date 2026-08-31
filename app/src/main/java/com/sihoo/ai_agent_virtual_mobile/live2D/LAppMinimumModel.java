@@ -105,7 +105,12 @@ public class LAppMinimumModel extends CubismUserModel {
 
         // モーションの再生がない場合、待機モーションの中からランダムで再生する
         if (motionManager.isFinished()) {
-            startMotion(LAppDefine.MotionGroup.IDLE.getId(), 0, LAppDefine.Priority.IDLE.getPriority());
+            final String idleGroup = LAppDefine.MotionGroup.IDLE.getId();
+
+            // model3.json に Idle モーションが登録されていない場合は再生を試みない。
+            if (modelSetting.getMotionCount(idleGroup) > 0) {
+                startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
+            }
         } else {
             // モーションを更新
             motionUpdated = motionManager.updateMotion(model, deltaTimeSeconds);
@@ -148,7 +153,7 @@ public class LAppMinimumModel extends CubismUserModel {
         CubismMotion motion = (CubismMotion) motions.get(name);
 
         if (motion == null) {
-            if (fileName.equals("")) {
+            if (!fileName.equals("")) {
                 String path = modelHomeDirectory + fileName;
 
                 byte[] buffer;
