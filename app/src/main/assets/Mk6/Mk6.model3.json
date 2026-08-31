@@ -7,7 +7,14 @@
 			"Mk6.8192/texture_01.png"
 		],
 		"Physics": "Mk6.physics3.json",
-		"DisplayInfo": "Mk6.cdi3.json"
+		"DisplayInfo": "Mk6.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{
+					"File": "Motions/idle.motion3.json"
+				}
+			]
+		}
 	},
 	"Groups": [
 		{

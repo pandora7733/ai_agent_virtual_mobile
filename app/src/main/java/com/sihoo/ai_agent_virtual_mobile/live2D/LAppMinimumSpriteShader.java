@@ -17,7 +17,7 @@ public class LAppMinimumSpriteShader implements AutoCloseable {
 
     @Override
     public void close() {
-        GLES20.glDeleteShader(programId);
+        GLES20.glDeleteProgram(programId);
     }
 
     /**

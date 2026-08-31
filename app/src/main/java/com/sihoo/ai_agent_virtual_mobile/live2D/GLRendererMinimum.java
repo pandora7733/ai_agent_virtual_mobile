@@ -16,18 +16,27 @@ public class GLRendererMinimum implements GLSurfaceView.Renderer {
     // Called at initialization (when the drawing context is lost and recreated).
     @Override
     public void onSurfaceCreated(GL10 unused, EGLConfig config) {
-        LAppMinimumDelegate.getInstance().onSurfaceCreated();
+        if (delegate == null) {
+            delegate = LAppMinimumDelegate.getInstance();
+        }
+        delegate.onSurfaceCreated();
     }
 
     // Mainly called when switching between landscape and portrait.
     @Override
     public void onSurfaceChanged(GL10 unused, int width, int height) {
-        LAppMinimumDelegate.getInstance().onSurfaceChanged(width, height);
+        if (delegate != null) {
+            delegate.onSurfaceChanged(width, height);
+        }
     }
 
     // Called repeatedly for drawing.
     @Override
     public void onDrawFrame(GL10 unused) {
-        LAppMinimumDelegate.getInstance().run();
+        if (delegate != null) {
+            delegate.run();
+        }
     }
+
+    private LAppMinimumDelegate delegate;
 }

@@ -40,15 +40,29 @@ public class LAppMinimumDelegate {
 
     public void onStop() {}
 
+    /**
+     * GLスレッドから呼び出して、OpenGLおよびCubismリソースを解放する。
+     */
     public void onDestroy() {
+        isActive = false;
+
         if (view != null) {
             view.close();
+            view = null;
         }
-        textureManager = null;
+
+        if (textureManager != null) {
+            textureManager.releaseAllTextures();
+            textureManager = null;
+        }
 
         LAppMinimumLive2DManager.releaseInstance();
-        CubismFramework.dispose();
 
+        if (CubismFramework.isInitialized()) {
+            CubismFramework.dispose();
+        }
+
+        activity = null;
         releaseInstance();
     }
 
@@ -116,7 +130,7 @@ public class LAppMinimumDelegate {
         }
 
         // アプリケーションを非アクティブにする
-        if (!isActive) {
+        if (!isActive && activity != null) {
             activity.finishAndRemoveTask();
         }
     }

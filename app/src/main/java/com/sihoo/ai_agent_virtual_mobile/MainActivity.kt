@@ -33,6 +33,15 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        // Activity가 실제로 종료되는 경우에만 GL 리소스를 정리합니다.
+        // onPause() 이후에는 GL 스레드가 중지될 수 있으므로, 먼저 GL 스레드에
+        // 정리 작업을 예약한 다음 GLSurfaceView를 일시 정지합니다.
+        if (isFinishing && !isChangingConfigurations) {
+            val delegate = LAppMinimumDelegate.getInstance()
+            glSurfaceView.queueEvent {
+                delegate.onDestroy()
+            }
+        }
         glSurfaceView.onPause()
         super.onPause()
     }
@@ -48,7 +57,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        LAppMinimumDelegate.getInstance().onDestroy()
         super.onDestroy()
     }
 }

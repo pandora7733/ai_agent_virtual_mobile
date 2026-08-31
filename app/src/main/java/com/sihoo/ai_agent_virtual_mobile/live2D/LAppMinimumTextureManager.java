@@ -92,5 +92,19 @@ public class LAppMinimumTextureManager {
         textures.clear();
     }
 
+    /**
+     * OpenGLコンテキストが有効な状態で、保持しているテクスチャをすべて解放する。
+     */
+    public void releaseAllTextures() {
+        if (!textures.isEmpty()) {
+            int[] textureIds = new int[textures.size()];
+            for (int i = 0; i < textures.size(); i++) {
+                textureIds[i] = textures.get(i).id;
+            }
+            GLES20.glDeleteTextures(textureIds.length, textureIds, 0);
+            textures.clear();
+        }
+    }
+
     private final List<TextureInfo> textures = new ArrayList<TextureInfo>();        // 画像情報のリスト
 }

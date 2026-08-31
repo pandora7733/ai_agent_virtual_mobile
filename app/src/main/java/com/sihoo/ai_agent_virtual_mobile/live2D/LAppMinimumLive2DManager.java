@@ -24,6 +24,10 @@ public class LAppMinimumLive2DManager {
 
     public static void releaseInstance() {
         if (s_instance != null) {
+            if (s_instance.model != null) {
+                s_instance.model.deleteModel();
+                s_instance.model = null;
+            }
             CubismOffscreenManagerAndroid.releaseInstance();
         }
         s_instance = null;
