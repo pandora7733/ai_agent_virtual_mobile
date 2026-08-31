@@ -23,4 +23,8 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "ai_agent_virtual_mobile"
+
 include(":app")
+include(":cubism:framework")
+
+project(":cubism:framework").projectDir = file("cubism/framework")
