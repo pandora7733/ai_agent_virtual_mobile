@@ -3,6 +3,9 @@ package com.sihoo.ai_agent_virtual_mobile
 import android.app.Activity
 import android.opengl.GLSurfaceView
 import android.os.Bundle
+import com.sihoo.ai_agent_virtual_mobile.live2D.GLRendererMinimum
+import com.sihoo.ai_agent_virtual_mobile.live2D.LAppMinimumDelegate
+
 
 class MainActivity : Activity() {
 
@@ -15,8 +18,8 @@ class MainActivity : Activity() {
             // Live2D Java 샘플이 OpenGL ES 2.0을 사용하므로 동일하게 설정합니다.
             setEGLContextClientVersion(2)
 
-            setRenderer(Live2DRenderer())
-
+//            setRenderer(Live2DRenderer())
+            setRenderer(GLRendererMinimum())
             // 계속해서 화면을 다시 그립니다.
             renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         }
@@ -32,5 +35,20 @@ class MainActivity : Activity() {
     override fun onPause() {
         glSurfaceView.onPause()
         super.onPause()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        LAppMinimumDelegate.getInstance().onStart(this)
+    }
+
+    override fun onStop() {
+        LAppMinimumDelegate.getInstance().onStop()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        LAppMinimumDelegate.getInstance().onDestroy()
+        super.onDestroy()
     }
 }
