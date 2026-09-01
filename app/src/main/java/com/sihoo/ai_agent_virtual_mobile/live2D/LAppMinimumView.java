@@ -7,16 +7,25 @@
 
 package com.sihoo.ai_agent_virtual_mobile.live2D;
 
+import static java.lang.Math.clamp;
+
 import com.sihoo.ai_agent_virtual_mobile.live2D.demo.LAppDefine;
 import com.sihoo.ai_agent_virtual_mobile.live2D.demo.TouchManager;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.math.CubismViewMatrix;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRenderTargetAndroid;
+import android.util.Log;
 
 public class LAppMinimumView implements AutoCloseable {
     /**
      * LAppMinimumModelのレンダリング先
      */
+
+    private static final float HEAD_CENTER_X = 0.08f;
+    private static final float HEAD_CENTER_Y = 0.42f;
+    private static final float LOOK_RANGE_X = 1.0f;
+    private static final float LOOK_RANGE_Y = 1.0f;
+
     public enum RenderingTarget {
         NONE,   // デフォルトのフレームバッファにレンダリング
         MODEL_FRAME_BUFFER,     // LAppMinimumModelが各自持つフレームバッファにレンダリング
@@ -225,14 +234,24 @@ public class LAppMinimumView implements AutoCloseable {
      * @param pointY スクリーンY座標
      */
     public void onTouchesMoved(float pointX, float pointY) {
-
-
-        float viewX = transformViewX(touchManager.getLastX());
-        float viewY = transformViewY(touchManager.getLastY());
-
         touchManager.touchesMoved(pointX, pointY);
 
-        LAppMinimumLive2DManager.getInstance().onDrag(viewX, viewY);
+        float viewX = transformViewX(pointX);
+        float viewY = transformViewY(pointY);
+
+        float relativeX = viewX - HEAD_CENTER_X;
+        float relativeY = viewY - HEAD_CENTER_Y;
+
+        float lookX = clamp(relativeX / LOOK_RANGE_X, -1.0f, 1.0f);
+        float lookY = clamp(relativeY / LOOK_RANGE_Y, -1.0f, 1.0f);
+
+        LAppMinimumLive2DManager.getInstance().onDrag(lookX, lookY);
+
+        Log.d(
+                "Live2D_COORD",
+                "device=(" + pointX + ", " + pointY + ")" +
+                        ", view=(" + viewX + ", " + viewY + ")"
+        );
     }
 
     /**
