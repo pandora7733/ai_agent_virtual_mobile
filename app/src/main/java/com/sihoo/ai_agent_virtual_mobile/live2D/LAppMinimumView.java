@@ -21,10 +21,10 @@ public class LAppMinimumView implements AutoCloseable {
      * LAppMinimumModelのレンダリング先
      */
 
-    private static final float HEAD_CENTER_X = 0.08f;
-    private static final float HEAD_CENTER_Y = 0.42f;
-    private static final float LOOK_RANGE_X = 1.0f;
-    private static final float LOOK_RANGE_Y = 1.0f;
+    private static final float HEAD_CENTER_X = 0.00f;
+    private static final float HEAD_CENTER_Y = 0.70f;
+    private static final float LOOK_RANGE_X = 0.67f;
+    private static final float LOOK_RANGE_Y = 1.45f;
 
     public enum RenderingTarget {
         NONE,   // デフォルトのフレームバッファにレンダリング
