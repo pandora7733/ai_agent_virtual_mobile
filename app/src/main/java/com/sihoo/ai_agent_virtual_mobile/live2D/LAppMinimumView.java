@@ -225,6 +225,8 @@ public class LAppMinimumView implements AutoCloseable {
      * @param pointY スクリーンY座標
      */
     public void onTouchesMoved(float pointX, float pointY) {
+
+
         float viewX = transformViewX(touchManager.getLastX());
         float viewY = transformViewY(touchManager.getLastY());
 

@@ -5,6 +5,7 @@ import android.opengl.GLSurfaceView
 import android.os.Bundle
 import com.sihoo.ai_agent_virtual_mobile.live2D.GLRendererMinimum
 import com.sihoo.ai_agent_virtual_mobile.live2D.LAppMinimumDelegate
+import android.view.MotionEvent
 
 
 class MainActivity : Activity() {
@@ -22,6 +23,37 @@ class MainActivity : Activity() {
             setRenderer(GLRendererMinimum())
             // 계속해서 화면을 다시 그립니다.
             renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+
+            setOnTouchListener { _, event ->
+                val x = event.x
+                val y = event.y
+
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        queueEvent {
+                            LAppMinimumDelegate.getInstance()
+                                .onTouchBegan(x, y)
+                        }
+                    }
+
+                    MotionEvent.ACTION_MOVE -> {
+                        queueEvent {
+                            LAppMinimumDelegate.getInstance()
+                                .onTouchMoved(x, y)
+                        }
+                    }
+
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> {
+                        queueEvent {
+                            LAppMinimumDelegate.getInstance()
+                                .onTouchEnd(x, y)
+                        }
+                    }
+                }
+
+                true
+            }
         }
 
         setContentView(glSurfaceView)
