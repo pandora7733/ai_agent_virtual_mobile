@@ -37,9 +37,21 @@ class MainActivity : Activity() {
                     }
 
                     MotionEvent.ACTION_MOVE -> {
-                        queueEvent {
-                            LAppMinimumDelegate.getInstance()
-                                .onTouchMoved(x, y)
+                        if (event.pointerCount >= 2) {
+                            val x1 = event.getX(0)
+                            val y1 = event.getY(0)
+                            val x2 = event.getX(1)
+                            val y2 = event.getY(1)
+
+                            queueEvent {
+                                LAppMinimumDelegate.getInstance()
+                                    .onTouchMoved(x1, y1, x2, y2)
+                            }
+                        } else {
+                            queueEvent {
+                                LAppMinimumDelegate.getInstance()
+                                    .onTouchMoved(x, y)
+                            }
                         }
                     }
 

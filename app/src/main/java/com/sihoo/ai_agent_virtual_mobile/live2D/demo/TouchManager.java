@@ -59,7 +59,7 @@ public class TouchManager {
         if (lastTouchDistance > 0.0f) {
             scale = (float) Math.pow(distance / lastTouchDistance, 0.75f);
             deltaX = calculateMovingAmount(deviceX1 - lastX1, deviceX2 - lastX2);
-            deltaX = calculateMovingAmount(deviceY1 - lastY1, deviceY2 - lastY2);
+            deltaY = calculateMovingAmount(deviceY1 - lastY1, deviceY2 - lastY2);
         } else {
             scale = 1.0f;
             deltaX = 0.0f;

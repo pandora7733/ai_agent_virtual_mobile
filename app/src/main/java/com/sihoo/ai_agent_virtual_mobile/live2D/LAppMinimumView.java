@@ -7,8 +7,6 @@
 
 package com.sihoo.ai_agent_virtual_mobile.live2D;
 
-import static java.lang.Math.clamp;
-
 import com.sihoo.ai_agent_virtual_mobile.live2D.demo.LAppDefine;
 import com.sihoo.ai_agent_virtual_mobile.live2D.demo.TouchManager;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
@@ -227,12 +225,6 @@ public class LAppMinimumView implements AutoCloseable {
         touchManager.touchesBegan(pointX, pointY);
     }
 
-    /**
-     * タッチしているときにポインターが動いたら呼ばれる
-     *
-     * @param pointX スクリーンX座標
-     * @param pointY スクリーンY座標
-     */
     public void onTouchesMoved(float pointX, float pointY) {
         touchManager.touchesMoved(pointX, pointY);
 
@@ -246,11 +238,27 @@ public class LAppMinimumView implements AutoCloseable {
         float lookY = clamp(relativeY / LOOK_RANGE_Y, -1.0f, 1.0f);
 
         LAppMinimumLive2DManager.getInstance().onDrag(lookX, lookY);
+    }
+
+    /**
+     * タッチしているときにポインターが動いたら呼ばれる
+     *
+     * @param pointX スクリーンX座標
+     * @param pointY スクリーンY座標
+     */
+    public void onTouchesMoved(
+            float x1,
+            float y1,
+            float x2,
+            float y2
+    ) {
+        touchManager.touchesMoved(x1, y1, x2, y2);
 
         Log.d(
-                "Live2D_COORD",
-                "device=(" + pointX + ", " + pointY + ")" +
-                        ", view=(" + viewX + ", " + viewY + ")"
+                "PINCH",
+                "scale=" + touchManager.getScale()
+                        + ", deltaX=" + touchManager.getDeltaX()
+                        + ", deltaY=" + touchManager.getDeltaY()
         );
     }
 
@@ -338,6 +346,10 @@ public class LAppMinimumView implements AutoCloseable {
      */
     public RenderingTarget getRenderingTarget() {
         return renderingTarget;
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private final CubismMatrix44 deviceToScreen = CubismMatrix44.create(); // デバイス座標からスクリーン座標に変換するための行列

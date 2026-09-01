@@ -160,7 +160,18 @@ public class LAppMinimumDelegate {
         mouseY = y;
 
         if (isCaptured && view != null) {
-            view.onTouchesMoved(mouseX, mouseY);
+            view.onTouchesMoved(x, y);
+        }
+    }
+
+    public void onTouchMoved(
+            float x1,
+            float y1,
+            float x2,
+            float y2
+    ) {
+        if (isCaptured && view != null) {
+            view.onTouchesMoved(x1, y1, x2, y2);
         }
     }
 
