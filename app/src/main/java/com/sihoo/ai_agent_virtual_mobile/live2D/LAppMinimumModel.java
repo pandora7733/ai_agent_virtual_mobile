@@ -183,6 +183,40 @@ public class LAppMinimumModel extends CubismUserModel {
         return motionManager.startMotionPriority(motion, priority);
     }
 
+    public boolean setExpression(String expressionName) {
+        ACubismMotion expression = expressions.get(expressionName);
+
+        if (!(expression instanceof CubismExpressionMotion)) {
+            if (LAppDefine.DEBUG_LOG_ENABLE) {
+                CubismFramework.coreLogFunction(
+                        "[APP] expression not found: " + expressionName
+                );
+            }
+            return false;
+        }
+
+        int motionId = expressionManager.startMotionPriority(
+                expression,
+                LAppDefine.Priority.NORMAL.getPriority()
+        );
+
+        if (LAppDefine.DEBUG_LOG_ENABLE) {
+            CubismFramework.coreLogFunction(
+                    "[APP] start expression: "
+                            + expressionName
+                            + ", id="
+                            + motionId
+            );
+        }
+
+        return motionId >= 0;
+    }
+
+    public boolean clearExpression() {
+        expressionManager.stopAllMotions();
+        return true;
+    }
+
     public void draw(CubismMatrix44 matrix) {
         if (model == null) {
             LAppMinimumDelegate.getInstance().getActivity().finish();

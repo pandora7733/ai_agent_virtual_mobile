@@ -33,6 +33,32 @@ public class LAppMinimumLive2DManager {
         s_instance = null;
     }
 
+    public enum OutfitType{
+        DEFAULT,
+        OUTFIT,
+        JACKET_OFF
+    }
+
+    public boolean applyOutfit(OutfitType outfitType) {
+        if (model == null || outfitType == null) {
+            return false;
+        }
+
+        switch (outfitType) {
+            case OUTFIT:
+                return model.setExpression("Outfit");
+
+            case JACKET_OFF:
+                return model.setExpression("JaketOFF");
+
+            case DEFAULT:
+                return model.clearExpression();
+
+            default:
+                return false;
+        }
+    }
+
     public void loadModel(String modelDirectoryName) {
         String dir = modelDirectoryName + "/";
         model = new LAppMinimumModel(dir);
