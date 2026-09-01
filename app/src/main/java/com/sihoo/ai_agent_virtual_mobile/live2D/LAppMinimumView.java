@@ -254,6 +254,10 @@ public class LAppMinimumView implements AutoCloseable {
     ) {
         touchManager.touchesMoved(x1, y1, x2, y2);
 
+        float gestureScale = touchManager.getScale();
+
+        LAppMinimumLive2DManager.getInstance().onPinchScale(gestureScale);
+
         Log.d(
                 "PINCH",
                 "scale=" + touchManager.getScale()

@@ -53,13 +53,23 @@ public class LAppMinimumLive2DManager {
 
         float canvasRatio = model.getModel().getCanvasHeight() / model.getModel().getCanvasWidth();
 
+//        if (canvasRatio < displayRatio) {
+//            // 横長モデルを幅に合わせて縦方向のスケールを調整
+//            model.getModelMatrix().setWidth(2.0f);
+//            projection.scale(1.0f, aspectRatio);
+//        } else {
+//            // 縦長モデルを高さに合わせて横方向のスケールを調整
+//            model.getModelMatrix().setHeight(2.0f);
+//            projection.scale(1.0f / aspectRatio, 1.0f);
+//        }
+
+        final float finalModelSize = 2.0f * userScale;
+
         if (canvasRatio < displayRatio) {
-            // 横長モデルを幅に合わせて縦方向のスケールを調整
-            model.getModelMatrix().setWidth(2.0f);
+            model.getModelMatrix().setWidth(finalModelSize);
             projection.scale(1.0f, aspectRatio);
         } else {
-            // 縦長モデルを高さに合わせて横方向のスケールを調整
-            model.getModelMatrix().setHeight(2.0f);
+            model.getModelMatrix().setHeight(finalModelSize);
             projection.scale(1.0f / aspectRatio, 1.0f);
         }
 
@@ -91,6 +101,22 @@ public class LAppMinimumLive2DManager {
      */
     public void onDrag(float x, float y) {
         model.setDragging(x, y);
+    }
+
+    public void onPinchScale(float gestureScale) {
+        if (gestureScale <= 0.0f) {
+            return;
+        }
+
+        userScale *= gestureScale;
+
+        if (userScale < MIN_USER_SCALE) {
+            userScale = MIN_USER_SCALE;
+        }
+
+        if (userScale > MAX_USER_SCALE) {
+            userScale = MAX_USER_SCALE;
+        }
     }
 
     /**
@@ -128,5 +154,9 @@ public class LAppMinimumLive2DManager {
 
     private final CubismMatrix44 viewMatrix = CubismMatrix44.create();
     private final CubismMatrix44 projection = CubismMatrix44.create();
+    private float userScale = 1.0f;
+
+    private static final float MIN_USER_SCALE = 0.8f;
+    private static final float MAX_USER_SCALE = 2.0f;
 }
 
