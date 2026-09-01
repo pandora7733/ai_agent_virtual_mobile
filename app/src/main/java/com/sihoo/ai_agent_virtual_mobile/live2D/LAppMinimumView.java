@@ -246,25 +246,66 @@ public class LAppMinimumView implements AutoCloseable {
      * @param pointX スクリーンX座標
      * @param pointY スクリーンY座標
      */
+
     public void onTouchesMoved(
             float x1,
             float y1,
             float x2,
             float y2
     ) {
+        float previousDeviceCenterX = touchManager.getLastX();
+        float previousDeviceCenterY = touchManager.getLastY();
+
+        float currentDeviceCenterX = (x1 + x2) * 0.5f;
+        float currentDeviceCenterY = (y1 + y2) * 0.5f;
+
+        boolean hasPreviousPinch =
+                touchManager.getLastTouchDistance() > 0.0f;
+
         touchManager.touchesMoved(x1, y1, x2, y2);
 
-        float gestureScale = touchManager.getScale();
+        if (!hasPreviousPinch) {
+            return;
+        }
 
-        LAppMinimumLive2DManager.getInstance().onPinchScale(gestureScale);
+        float previousCenterX =
+                transformViewX(previousDeviceCenterX);
+
+        float previousCenterY =
+                transformViewY(previousDeviceCenterY);
+
+        float currentCenterX =
+                transformViewX(currentDeviceCenterX);
+
+        float currentCenterY =
+                transformViewY(currentDeviceCenterY);
+
+        LAppMinimumLive2DManager.getInstance().onPinch(
+                touchManager.getScale(),
+                previousCenterX,
+                previousCenterY,
+                currentCenterX,
+                currentCenterY
+        );
 
         Log.d(
                 "PINCH",
                 "scale=" + touchManager.getScale()
-                        + ", deltaX=" + touchManager.getDeltaX()
-                        + ", deltaY=" + touchManager.getDeltaY()
+                        + ", previousCenter=("
+                        + previousCenterX
+                        + ", "
+                        + previousCenterY
+                        + ")"
+                        + ", currentCenter=("
+                        + currentCenterX
+                        + ", "
+                        + currentCenterY
+                        + ")"
         );
     }
+
+
+
 
     /**
      * タッチが終了したら呼ばれる

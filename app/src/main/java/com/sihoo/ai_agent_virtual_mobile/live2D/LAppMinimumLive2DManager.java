@@ -73,6 +73,8 @@ public class LAppMinimumLive2DManager {
             projection.scale(1.0f / aspectRatio, 1.0f);
         }
 
+        model.getModelMatrix().setPosition(userOffsetX, userOffsetY);
+
         // 必要があればここで乗算する
         if (viewMatrix != null) {
             viewMatrix.multiplyByMatrix(projection);
@@ -103,20 +105,39 @@ public class LAppMinimumLive2DManager {
         model.setDragging(x, y);
     }
 
-    public void onPinchScale(float gestureScale) {
+    public void onPinch(
+            float gestureScale,
+            float previousCenterX,
+            float previousCenterY,
+            float currentCenterX,
+            float currentCenterY
+    ) {
         if (gestureScale <= 0.0f) {
             return;
         }
 
-        userScale *= gestureScale;
+        float oldScale = userScale;
+        float newScale = oldScale * gestureScale;
 
-        if (userScale < MIN_USER_SCALE) {
-            userScale = MIN_USER_SCALE;
+        if (newScale < MIN_USER_SCALE) {
+            newScale = MIN_USER_SCALE;
         }
 
-        if (userScale > MAX_USER_SCALE) {
-            userScale = MAX_USER_SCALE;
+        if (newScale > MAX_USER_SCALE) {
+            newScale = MAX_USER_SCALE;
         }
+
+        float scaleRatio = newScale / oldScale;
+
+        userOffsetX =
+                currentCenterX
+                - scaleRatio * (previousCenterX - userOffsetX);
+
+        userOffsetY =
+                currentCenterY
+                - scaleRatio * (previousCenterY - userOffsetY);
+
+        userScale = newScale;
     }
 
     /**
@@ -158,5 +179,8 @@ public class LAppMinimumLive2DManager {
 
     private static final float MIN_USER_SCALE = 0.8f;
     private static final float MAX_USER_SCALE = 2.0f;
+
+    private float userOffsetX = 0.0f;
+    private float userOffsetY = 0.0f;
 }
 
