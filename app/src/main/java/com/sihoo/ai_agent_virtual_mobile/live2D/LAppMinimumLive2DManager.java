@@ -63,6 +63,19 @@ public class LAppMinimumLive2DManager {
         String dir = modelDirectoryName + "/";
         model = new LAppMinimumModel(dir);
         model.loadAssets(dir, modelDirectoryName + ".model3.json");
+
+        petPreferences = new PetPreferences(
+                LAppMinimumDelegate.getInstance().getActivity()
+        );
+
+        if (petPreferences.isFirstVisit()) {
+            currentState = CharacterState.FIRST_VISIT;
+            firstVisitElapsed = 0.0f;
+            firstVisitFrameStarted = false;
+            model.setExpression("Happy");
+        } else {
+            currentState = CharacterState.IDLE;
+        }
     }
 
     // モデル更新処理及び描画処理を行う
@@ -100,6 +113,28 @@ public class LAppMinimumLive2DManager {
         }
 
         model.getModelMatrix().setPosition(userOffsetX, userOffsetY);
+
+        if (currentState == CharacterState.FIRST_VISIT && petPreferences != null) {
+            if (!firstVisitFrameStarted) {
+                firstVisitFrameStarted = true;
+            } else {
+                float deltaTime = LAppMinimumPal.getDeltaTime();
+                deltaTime = Math.min(deltaTime, 0.1f);
+                firstVisitElapsed += deltaTime;
+            }
+
+            if (firstVisitElapsed >= FIRST_VISIT_DURATION) {
+                model.clearExpression();
+
+                petPreferences.markFirstVisitCompleted();
+
+                currentState = CharacterState.IDLE;
+
+                LAppMinimumPal.printLog(
+                        "[APP] state changed: FIRST_VISIT -> IDLE"
+                );
+            }
+        }
 
         // 必要があればここで乗算する
         if (viewMatrix != null) {
@@ -203,10 +238,17 @@ public class LAppMinimumLive2DManager {
     private final CubismMatrix44 projection = CubismMatrix44.create();
     private float userScale = 1.0f;
 
-    private static final float MIN_USER_SCALE = 0.8f;
-    private static final float MAX_USER_SCALE = 2.0f;
+    private static final float MIN_USER_SCALE = 0.4f;
+    private static final float MAX_USER_SCALE = 2.6f;
 
     private float userOffsetX = 0.0f;
     private float userOffsetY = 0.0f;
+
+    private CharacterState currentState = CharacterState.LOADING;
+    private float firstVisitElapsed = 0.0f;
+    private boolean firstVisitFrameStarted = false;
+    private PetPreferences petPreferences;
+
+    private static final float FIRST_VISIT_DURATION = 3.0f;
 }
 
