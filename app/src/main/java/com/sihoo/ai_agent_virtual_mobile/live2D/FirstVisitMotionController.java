@@ -10,13 +10,13 @@ public class FirstVisitMotionController {
     private static final float HEAD_SLEEP_OFFSET = 3.0f;
 
     // 좌우로 바라보는 정도
-    private static final float HEAD_X_OFFSET = 7.0f;
+    private static final float HEAD_X_OFFSET = 17.5f;
 
     // 고개 기울기 정도
-    private static final float HEAD_Z_OFFSET = 2.0f;
+    private static final float HEAD_Z_OFFSET = 5.7f;
 
     // 몸 흔들림 정도
-    private static final float BODY_X_OFFSET = 2.0f;
+    private static final float BODY_X_OFFSET = 5.0f;
 
     private final CubismId idParamAngleX;
     private final CubismId idParamAngleY;
