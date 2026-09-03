@@ -6,8 +6,8 @@ import com.live2d.sdk.cubism.framework.model.CubismModel;
 public class FirstVisitMotionController {
     private static final float MOTION_DURATION = 3.2f;
 
-    // 고개를 드는 정도
-    private static final float HEAD_Y_OFFSET = 8.0f;
+    // 잠든 동안 고개를 숙이는 정도
+    private static final float HEAD_SLEEP_OFFSET = 3.0f;
 
     // 좌우로 바라보는 정도
     private static final float HEAD_X_OFFSET = 7.0f;
@@ -114,27 +114,17 @@ public class FirstVisitMotionController {
         float eyeOpenRight = 1.0f;
 
         if (elapsed < 0.35f) {
-            // 잠에서 깨어나기 전, 눈을 감고 고개를 약간 숙임
+            // 눈을 감고 잠든 자세로 들어감
             float t = smoothStep(elapsed / 0.35f);
 
-            offsetY = -4.0f * t;
+            offsetY = -HEAD_SLEEP_OFFSET * t;
             eyeOpenLeft = lerp(baseEyeLOpen, 0.0f, t);
             eyeOpenRight = lerp(baseEyeROpen, 0.0f, t);
 
-        } else if (elapsed < 0.95f) {
-            // 눈을 뜨면서 고개를 들어 올림
-            float t = smoothStep(
-                    (elapsed - 0.35f) / 0.6f
-            );
-
-            offsetY = -4.0f + (HEAD_Y_OFFSET + 4.0f) * t;
-            eyeOpenLeft = t;
-            eyeOpenRight = t;
-
-        } else if (elapsed < 2.35f) {
-            // 속도가 끊기지 않는 좌우 흔들림
+        } else if (elapsed < 1.95f) {
+            // 눈을 감은 상태로 좌우로 머리를 흔듦
             float t = normalize(
-                    (elapsed - 0.95f) / 1.4f
+                    (elapsed - 0.35f) / 1.6f
             );
 
             float envelope = (float) Math.sin(t * Math.PI);
@@ -144,10 +134,7 @@ public class FirstVisitMotionController {
                     * envelope
                     * (float) Math.sin(t * Math.PI * 4.0f);
 
-            offsetY = HEAD_Y_OFFSET
-                    + 1.2f
-                    * envelope
-                    * (float) Math.sin(t * Math.PI * 2.0f);
+            offsetY = -HEAD_SLEEP_OFFSET;
 
             offsetZ = HEAD_Z_OFFSET
                     * envelope
@@ -159,29 +146,19 @@ public class FirstVisitMotionController {
                     * envelope
                     * (float) Math.sin(t * Math.PI * 2.0f);
 
-            eyeOpenLeft = 1.0f;
-            eyeOpenRight = 1.0f;
-
-            // 깨어난 직후 한 번 자연스럽게 깜빡임
-            if (elapsed >= 1.45f && elapsed < 1.75f) {
-                float blinkT = normalize(
-                        (elapsed - 1.45f) / 0.3f
-                );
-
-                eyeOpenLeft = blinkValue(blinkT);
-                eyeOpenRight = blinkValue(blinkT);
-            }
+            eyeOpenLeft = 0.0f;
+            eyeOpenRight = 0.0f;
 
         } else {
-            // 흔들림을 줄이며 원래 자세로 복귀
-            float t = smoothStep(
-                    (elapsed - 2.35f) / 0.85f
+            // 기본 자세로 돌아오면서 눈을 뜨고 한 번 깜빡임
+            float t = normalize(
+                    (elapsed - 1.95f) / 1.25f
             );
-            float remain = 1.0f - t;
+            float remain = 1.0f - smoothStep(t);
 
-            offsetY = HEAD_Y_OFFSET * remain;
-            eyeOpenLeft = 1.0f;
-            eyeOpenRight = 1.0f;
+            offsetY = -HEAD_SLEEP_OFFSET * remain;
+            eyeOpenLeft = wakeEyeValue(t, baseEyeLOpen);
+            eyeOpenRight = wakeEyeValue(t, baseEyeROpen);
         }
 
         model.setParameterValue(
@@ -257,14 +234,41 @@ public class FirstVisitMotionController {
         return start + (end - start) * normalize(amount);
     }
 
-    private static float blinkValue(float value) {
+    private static float wakeEyeValue(
+            float value,
+            float openValue
+    ) {
         value = normalize(value);
 
-        if (value < 0.5f) {
-            return 1.0f - smoothStep(value * 2.0f);
+        if (value < 0.2f) {
+            return 0.0f;
         }
 
-        return smoothStep((value - 0.5f) * 2.0f);
+        if (value < 0.38f) {
+            return lerp(
+                    0.0f,
+                    openValue,
+                    smoothStep((value - 0.2f) / 0.18f)
+            );
+        }
+
+        if (value < 0.50f) {
+            return lerp(
+                    openValue,
+                    0.0f,
+                    smoothStep((value - 0.38f) / 0.12f)
+            );
+        }
+
+        if (value < 0.75f) {
+            return lerp(
+                    0.0f,
+                    openValue,
+                    smoothStep((value - 0.50f) / 0.25f)
+            );
+        }
+
+        return openValue;
     }
 
     public float getElapsed() {
