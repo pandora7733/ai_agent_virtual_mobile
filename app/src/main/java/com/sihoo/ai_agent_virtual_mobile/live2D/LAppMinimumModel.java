@@ -13,6 +13,7 @@ import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
 import com.live2d.sdk.cubism.framework.ICubismModelSetting;
 import com.live2d.sdk.cubism.framework.effect.CubismLook;
+import com.live2d.sdk.cubism.framework.effect.CubismBreath;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.id.CubismIdManager;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
@@ -25,6 +26,7 @@ import com.live2d.sdk.cubism.framework.motion.CubismLookUpdater;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismPhysicsUpdater;
 import com.live2d.sdk.cubism.framework.motion.CubismPoseUpdater;
+import com.live2d.sdk.cubism.framework.motion.CubismBreathUpdater;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRenderTargetAndroid;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
@@ -47,6 +49,7 @@ public class LAppMinimumModel extends CubismUserModel {
         idParamEyeBallY = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_BALL_Y.getId());
         idParamEyeLOpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_L_OPEN.getId());
         idParamEyeROpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_R_OPEN.getId());
+        idParamBreath = idManager.getId(CubismDefaultParameterId.ParameterId.BREATH.getId());
 
         firstVisitMotionController = new FirstVisitMotionController(
                 idParamAngleX,
@@ -395,6 +398,65 @@ public class LAppMinimumModel extends CubismUserModel {
             updateScheduler.addUpdatableList(new CubismLookUpdater(look, dragManager));
         }
 
+        breath = CubismBreath.create();
+
+        List<CubismBreath.BreathParameterData> breathParameters =
+                new ArrayList<>();
+
+//      peak: 움직임 크기
+//      weight: 적용 강도
+//      cycle: 호흡 속도
+//      offset: 기본 위치 보정
+
+//      고개 상하
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamAngleY,
+                        0.0f,
+                        2.5f,
+                        4.5f,
+                        1.50f
+                )
+        );
+
+//      고개 기울기
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamAngleZ,
+                        0.0f,
+                        1.2f,
+                        4.8f,
+                        0.85f
+                )
+        );
+//      몸 움직임
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamBodyAngleX,
+                        0.0f,
+                        1.2f,
+                        4.2f,
+                        0.7f
+                )
+        );
+
+//      모델 내부 호흡 변형
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamBreath,
+                        0.0f,
+                        0.7f,
+                        3.7f,
+                        1.1f
+                )
+        );
+
+        breath.setParameters(breathParameters);
+
+        updateScheduler.addUpdatableList(
+                new CubismBreathUpdater(breath)
+        );
+
         updateScheduler.sortUpdatableList();
 
 
@@ -544,6 +606,7 @@ public class LAppMinimumModel extends CubismUserModel {
     private final CubismId idParamEyeBallY;
     private final CubismId idParamEyeLOpen;
     private final CubismId idParamEyeROpen;
+    private final CubismId idParamBreath;
     private final FirstVisitMotionController firstVisitMotionController;
     /**
      * 現フレームでメインモーションがパラメーターを更新したか
