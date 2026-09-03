@@ -70,9 +70,7 @@ public class LAppMinimumLive2DManager {
 
         if (petPreferences.isFirstVisit()) {
             currentState = CharacterState.FIRST_VISIT;
-            firstVisitElapsed = 0.0f;
-            firstVisitFrameStarted = false;
-            model.setExpression("Happy");
+            model.startFirstVisitMotion();
         } else {
             currentState = CharacterState.IDLE;
         }
@@ -114,26 +112,18 @@ public class LAppMinimumLive2DManager {
 
         model.getModelMatrix().setPosition(userOffsetX, userOffsetY);
 
-        if (currentState == CharacterState.FIRST_VISIT && petPreferences != null) {
-            if (!firstVisitFrameStarted) {
-                firstVisitFrameStarted = true;
-            } else {
-                float deltaTime = LAppMinimumPal.getDeltaTime();
-                deltaTime = Math.min(deltaTime, 0.1f);
-                firstVisitElapsed += deltaTime;
-            }
+        if (currentState == CharacterState.FIRST_VISIT
+                && petPreferences != null
+                && model.isFirstVisitMotionFinished()) {
+            model.clearExpression();
 
-            if (firstVisitElapsed >= FIRST_VISIT_DURATION) {
-                model.clearExpression();
+            petPreferences.markFirstVisitCompleted();
 
-                petPreferences.markFirstVisitCompleted();
+            currentState = CharacterState.IDLE;
 
-                currentState = CharacterState.IDLE;
-
-                LAppMinimumPal.printLog(
-                        "[APP] state changed: FIRST_VISIT -> IDLE"
-                );
-            }
+            LAppMinimumPal.printLog(
+                    "[APP] state changed: FIRST_VISIT -> IDLE"
+            );
         }
 
         // 必要があればここで乗算する
@@ -245,10 +235,6 @@ public class LAppMinimumLive2DManager {
     private float userOffsetY = 0.0f;
 
     private CharacterState currentState = CharacterState.LOADING;
-    private float firstVisitElapsed = 0.0f;
-    private boolean firstVisitFrameStarted = false;
     private PetPreferences petPreferences;
-
-    private static final float FIRST_VISIT_DURATION = 3.0f;
 }
 

@@ -45,6 +45,19 @@ public class LAppMinimumModel extends CubismUserModel {
         idParamBodyAngleX = idManager.getId(CubismDefaultParameterId.ParameterId.BODY_ANGLE_X.getId());
         idParamEyeBallX = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_BALL_X.getId());
         idParamEyeBallY = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_BALL_Y.getId());
+        idParamEyeLOpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_L_OPEN.getId());
+        idParamEyeROpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_R_OPEN.getId());
+
+        firstVisitMotionController = new FirstVisitMotionController(
+                idParamAngleX,
+                idParamAngleY,
+                idParamAngleZ,
+                idParamBodyAngleX,
+                idParamEyeBallX,
+                idParamEyeBallY,
+                idParamEyeLOpen,
+                idParamEyeROpen
+        );
 
         modelHomeDirectory = modelDirName;
     }
@@ -116,6 +129,11 @@ public class LAppMinimumModel extends CubismUserModel {
             motionUpdated = motionManager.updateMotion(model, deltaTimeSeconds);
         }
 
+        firstVisitMotionController.update(
+                model,
+                deltaTimeSeconds
+        );
+
         // モデルの状態を保存
         model.saveParameters();
 
@@ -125,6 +143,14 @@ public class LAppMinimumModel extends CubismUserModel {
         model.update();
 
         isUpdated(true);
+    }
+
+    public void startFirstVisitMotion() {
+        firstVisitMotionController.start(model);
+    }
+
+    public boolean isFirstVisitMotionFinished() {
+        return firstVisitMotionController.isFinished();
     }
 
     /**
@@ -516,6 +542,9 @@ public class LAppMinimumModel extends CubismUserModel {
      * パラメーターID: ParamEyeBallY
      */
     private final CubismId idParamEyeBallY;
+    private final CubismId idParamEyeLOpen;
+    private final CubismId idParamEyeROpen;
+    private final FirstVisitMotionController firstVisitMotionController;
     /**
      * 現フレームでメインモーションがパラメーターを更新したか
      */
