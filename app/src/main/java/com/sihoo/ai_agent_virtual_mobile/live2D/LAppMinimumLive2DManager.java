@@ -70,9 +70,11 @@ public class LAppMinimumLive2DManager {
 
         if (petPreferences.isFirstVisit()) {
             currentState = CharacterState.FIRST_VISIT;
+            model.setIdleEffectsEnabled(false);
             model.startFirstVisitMotion();
         } else {
             currentState = CharacterState.IDLE;
+            model.setIdleEffectsEnabled(true);
         }
     }
 
@@ -120,6 +122,7 @@ public class LAppMinimumLive2DManager {
             petPreferences.markFirstVisitCompleted();
 
             currentState = CharacterState.IDLE;
+            model.setIdleEffectsEnabled(true);
 
             LAppMinimumPal.printLog(
                     "[APP] state changed: FIRST_VISIT -> IDLE"

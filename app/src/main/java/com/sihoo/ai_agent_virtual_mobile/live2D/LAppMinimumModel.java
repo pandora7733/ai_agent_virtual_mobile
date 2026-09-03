@@ -49,6 +49,10 @@ public class LAppMinimumModel extends CubismUserModel {
         idParamEyeBallY = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_BALL_Y.getId());
         idParamEyeLOpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_L_OPEN.getId());
         idParamEyeROpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_R_OPEN.getId());
+        naturalBlinkController = new NaturalBlinkController(
+                idParamEyeLOpen,
+                idParamEyeROpen
+        );
         idParamBreath = idManager.getId(CubismDefaultParameterId.ParameterId.BREATH.getId());
 
         firstVisitMotionController = new FirstVisitMotionController(
@@ -137,6 +141,13 @@ public class LAppMinimumModel extends CubismUserModel {
                 deltaTimeSeconds
         );
 
+        if (idleEffectsEnabled) {
+            naturalBlinkController.update(
+                    model,
+                    deltaTimeSeconds
+            );
+        }
+
         // モデルの状態を保存
         model.saveParameters();
 
@@ -146,6 +157,14 @@ public class LAppMinimumModel extends CubismUserModel {
         model.update();
 
         isUpdated(true);
+    }
+
+    public void setIdleEffectsEnabled(boolean enabled) {
+        idleEffectsEnabled = enabled;
+
+        if (enabled) {
+            naturalBlinkController.reset();
+        }
     }
 
     public void startFirstVisitMotion() {
@@ -608,6 +627,8 @@ public class LAppMinimumModel extends CubismUserModel {
     private final CubismId idParamEyeROpen;
     private final CubismId idParamBreath;
     private final FirstVisitMotionController firstVisitMotionController;
+    private final NaturalBlinkController naturalBlinkController;
+    private boolean idleEffectsEnabled = false;
     /**
      * 現フレームでメインモーションがパラメーターを更新したか
      */
