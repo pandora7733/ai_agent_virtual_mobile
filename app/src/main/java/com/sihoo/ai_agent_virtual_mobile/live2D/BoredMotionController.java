@@ -1,5 +1,6 @@
 package com.sihoo.ai_agent_virtual_mobile.live2D;
 
+import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 
@@ -45,10 +46,14 @@ public class BoredMotionController {
     private static final float HEAD_TILT_OFFSET = 6.2f;
     private static final float BODY_OFFSET = 7.8f;
 
+    /** 얼굴 홍조 강도 (0~1). Happy 표정 약 0.30 기준으로 연하게 설정 */
+    private static final float BLUSH_INTENSITY = 0.52f;
+
     private final CubismId idParamAngleX;
     private final CubismId idParamAngleY;
     private final CubismId idParamAngleZ;
     private final CubismId idParamBodyAngleX;
+    private final CubismId idExpFaceBlush;
 
     private float elapsed = 0.0f;
     private boolean active = false;
@@ -57,6 +62,7 @@ public class BoredMotionController {
     private float baseAngleY;
     private float baseAngleZ;
     private float baseBodyAngleX;
+    private float baseFaceBlush;
 
     public BoredMotionController(
             CubismId idParamAngleX,
@@ -68,6 +74,8 @@ public class BoredMotionController {
         this.idParamAngleY = idParamAngleY;
         this.idParamAngleZ = idParamAngleZ;
         this.idParamBodyAngleX = idParamBodyAngleX;
+        this.idExpFaceBlush = CubismFramework.getIdManager()
+                .getId("ExpFaceBlush");
     }
 
     public boolean start(CubismModel model) {
@@ -80,6 +88,7 @@ public class BoredMotionController {
         baseAngleY = model.getParameterValue(idParamAngleY);
         baseAngleZ = model.getParameterValue(idParamAngleZ);
         baseBodyAngleX = model.getParameterValue(idParamBodyAngleX);
+        baseFaceBlush = model.getParameterValue(idExpFaceBlush);
 
         elapsed = 0.0f;
         active = true;
@@ -197,6 +206,10 @@ public class BoredMotionController {
                 idParamBodyAngleX,
                 baseBodyAngleX + bodyOffsetX
         );
+        model.setParameterValue(
+                idExpFaceBlush,
+                baseFaceBlush + computeBlushOffset()
+        );
 
         if (elapsed >= MOTION_DURATION) {
             applyBasePose(model);
@@ -205,6 +218,26 @@ public class BoredMotionController {
         }
 
         return false;
+    }
+
+    private float computeBlushOffset() {
+        if (elapsed < PHASE_HEAD_DOWN_END) {
+            float t = smoothStep(elapsed / PHASE_HEAD_DOWN_END);
+            return BLUSH_INTENSITY * t;
+        }
+
+        if (elapsed < PHASE_SWAY_END) {
+            return BLUSH_INTENSITY;
+        }
+
+        if (elapsed < PHASE_RETURN_END) {
+            float t = smoothStep(
+                    (elapsed - PHASE_SWAY_END) / RETURN_DURATION
+            );
+            return lerp(BLUSH_INTENSITY, 0.0f, t);
+        }
+
+        return 0.0f;
     }
 
     private static float swayOffsetX(int segmentIndex, float segmentT) {
@@ -242,6 +275,7 @@ public class BoredMotionController {
         model.setParameterValue(idParamAngleY, baseAngleY);
         model.setParameterValue(idParamAngleZ, baseAngleZ);
         model.setParameterValue(idParamBodyAngleX, baseBodyAngleX);
+        model.setParameterValue(idExpFaceBlush, baseFaceBlush);
     }
 
     private static float lerp(
