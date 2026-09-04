@@ -157,6 +157,7 @@ public class LAppDefine {
          * ID of the motion to be played at idling.
          */
         IDLE("Idle"),
+        SLEEP("Sleep"),
         /**
          * ID of the motion to be played at tapping body.
          */

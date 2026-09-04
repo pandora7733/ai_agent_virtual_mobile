@@ -154,13 +154,7 @@ public class LAppMinimumLive2DManager {
     }
 
     private void updateInactivityTimer() {
-        if (petPreferences == null) {
-            return;
-        }
-
-        // 최초 접속 모션 중에는 대기 시간을 측정하지 않음
-        if (currentState != CharacterState.IDLE
-                && currentState != CharacterState.BORED) {
+        if (petPreferences == null || model == null) {
             return;
         }
 
@@ -172,29 +166,84 @@ public class LAppMinimumLive2DManager {
                 )
         );
 
-        if (currentState == CharacterState.IDLE) {
-            idleElapsedSeconds += deltaTime;
+        switch (currentState) {
+            case IDLE:
+                inactivityElapsedSeconds += deltaTime;
 
-            if (idleElapsedSeconds >= BORED_AFTER_SECONDS) {
-                if (model.startBoredMotion()) {
-                    currentState = CharacterState.BORED;
-                    idleElapsedSeconds = 0.0f;
+                if (inactivityElapsedSeconds >= SLEEP_AFTER_SECONDS) {
+                    enterSleep("IDLE");
+                } else if (!boredPlayedForCurrentInactivity
+                        && inactivityElapsedSeconds >= BORED_AFTER_SECONDS) {
+                    if (model.startBoredMotion()) {
+                        boredPlayedForCurrentInactivity = true;
+                        currentState = CharacterState.BORED;
 
-                    LAppMinimumPal.printLog(
-                            "[APP] state changed: IDLE -> BORED"
-                    );
-                } else {
-                    idleElapsedSeconds = 0.0f;
+                        LAppMinimumPal.printLog(
+                                "[APP] state changed: IDLE -> BORED"
+                        );
+                    }
                 }
-            }
-        } else if (model.isBoredMotionFinished()) {
-            currentState = CharacterState.IDLE;
-            idleElapsedSeconds = 0.0f;
+                break;
 
-            LAppMinimumPal.printLog(
-                    "[APP] state changed: BORED -> IDLE"
-            );
+            case BORED:
+                inactivityElapsedSeconds += deltaTime;
+
+                if (model.isBoredMotionFinished()) {
+                    if (inactivityElapsedSeconds >= SLEEP_AFTER_SECONDS) {
+                        enterSleep("BORED");
+                    } else {
+                        currentState = CharacterState.IDLE;
+
+                        LAppMinimumPal.printLog(
+                                "[APP] state changed: BORED -> IDLE"
+                        );
+                    }
+                }
+                break;
+
+            case SLEEP:
+                sleepElapsedSeconds += deltaTime;
+
+                if (sleepElapsedSeconds >= SLEEP_DURATION_SECONDS) {
+                    wakeUpFromSleep("timeout");
+                }
+                break;
+
+            default:
+                break;
         }
+    }
+
+    private void enterSleep(String previousStateName) {
+        if (!model.startSleepMotion()) {
+            return;
+        }
+
+        currentState = CharacterState.SLEEP;
+        sleepElapsedSeconds = 0.0f;
+        model.setIdleEffectsEnabled(false);
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: "
+                        + previousStateName
+                        + " -> SLEEP"
+        );
+    }
+
+    private void wakeUpFromSleep(String reason) {
+        model.stopSleepMotion();
+        model.setIdleEffectsEnabled(true);
+
+        currentState = CharacterState.IDLE;
+        inactivityElapsedSeconds = 0.0f;
+        sleepElapsedSeconds = 0.0f;
+        boredPlayedForCurrentInactivity = false;
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: SLEEP -> IDLE ("
+                        + reason
+                        + ")"
+        );
     }
 
     public void onUserActivity() {
@@ -202,15 +251,18 @@ public class LAppMinimumLive2DManager {
             return;
         }
 
-        idleElapsedSeconds = 0.0f;
+        inactivityElapsedSeconds = 0.0f;
+        boredPlayedForCurrentInactivity = false;
 
         if (currentState == CharacterState.BORED) {
             model.stopBoredMotion();
             currentState = CharacterState.IDLE;
 
             LAppMinimumPal.printLog(
-                    "[APP] state changed: BORED -> IDLE"
+                    "[APP] state changed: BORED -> IDLE (user activity)"
             );
+        } else if (currentState == CharacterState.SLEEP) {
+            wakeUpFromSleep("user activity");
         }
     }
 
@@ -304,8 +356,12 @@ public class LAppMinimumLive2DManager {
 
     private CharacterState currentState = CharacterState.LOADING;
     private PetPreferences petPreferences;
-    private float idleElapsedSeconds = 0.0f;
+    private float inactivityElapsedSeconds = 0.0f;
+    private float sleepElapsedSeconds = 0.0f;
+    private boolean boredPlayedForCurrentInactivity = false;
 
     private static final float BORED_AFTER_SECONDS = 10.0f;
+    private static final float SLEEP_AFTER_SECONDS = 30.0f;
+    private static final float SLEEP_DURATION_SECONDS = 20.0f;
 }
 

@@ -135,6 +135,7 @@ public class LAppMinimumModel extends CubismUserModel {
 
             // model3.json に Idle モーションが登録されていない場合は再生を試みない。
             if (!boredMotionController.isActive()
+                    && !sleepMotionActive
                     && modelSetting.getMotionCount(idleGroup) > 0) {
                 startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
             }
@@ -198,6 +199,69 @@ public class LAppMinimumModel extends CubismUserModel {
 
     public boolean isBoredMotionFinished() {
         return boredMotionController.isFinished();
+    }
+
+    public boolean startSleepMotion() {
+        if (sleepMotionActive) {
+            return true;
+        }
+
+        final String sleepGroup = LAppDefine.MotionGroup.SLEEP.getId();
+        if (modelSetting.getMotionCount(sleepGroup) <= 0) {
+            return false;
+        }
+
+        capturePreSleepPose();
+        motionManager.stopAllMotions();
+
+        int motionId = startMotion(
+                sleepGroup,
+                0,
+                LAppDefine.Priority.FORCE.getPriority()
+        );
+
+        // Cubism의 실패 값은 -1이다. 성공한 핸들은 음수일 수도 있다.
+        sleepMotionActive = motionId != -1;
+
+        if (!sleepMotionActive) {
+            restorePreSleepPose();
+        }
+
+        return sleepMotionActive;
+    }
+
+    public void stopSleepMotion() {
+        motionManager.stopAllMotions();
+        sleepMotionActive = false;
+        restorePreSleepPose();
+    }
+
+    private void capturePreSleepPose() {
+        int parameterCount = model.getParameterCount();
+        preSleepParameterValues = new float[parameterCount];
+
+        for (int i = 0; i < parameterCount; i++) {
+            preSleepParameterValues[i] = model.getParameterValue(i);
+        }
+    }
+
+    private void restorePreSleepPose() {
+        if (preSleepParameterValues == null) {
+            return;
+        }
+
+        int parameterCount = Math.min(
+                model.getParameterCount(),
+                preSleepParameterValues.length
+        );
+
+        for (int i = 0; i < parameterCount; i++) {
+            model.setParameterValue(i, preSleepParameterValues[i]);
+        }
+
+        // 다음 update()의 loadParameters()가 Sleep 자세를 다시 불러오지 않게 한다.
+        model.saveParameters();
+        preSleepParameterValues = null;
     }
 
     /**
@@ -282,7 +346,7 @@ public class LAppMinimumModel extends CubismUserModel {
             );
         }
 
-        return motionId >= 0;
+        return motionId != -1;
     }
 
     public boolean clearExpression() {
@@ -654,6 +718,8 @@ public class LAppMinimumModel extends CubismUserModel {
     private final FirstVisitMotionController firstVisitMotionController;
     private final BoredMotionController boredMotionController;
     private final NaturalBlinkController naturalBlinkController;
+    private float[] preSleepParameterValues;
+    private boolean sleepMotionActive = false;
     private boolean idleEffectsEnabled = false;
     /**
      * 現フレームでメインモーションがパラメーターを更新したか
