@@ -201,11 +201,30 @@ public class LAppMinimumLive2DManager {
                 }
                 break;
 
+            case SLEEP_ENTRY:
+                if (model.isSleepEntryFinished()) {
+                    if (model.startSleepLoopMotion()) {
+                        currentState = CharacterState.SLEEP;
+                        sleepElapsedSeconds = 0.0f;
+
+                        LAppMinimumPal.printLog(
+                                "[APP] state changed: SLEEP_ENTRY -> SLEEP"
+                        );
+                    }
+                }
+                break;
+
             case SLEEP:
                 sleepElapsedSeconds += deltaTime;
 
                 if (sleepElapsedSeconds >= SLEEP_DURATION_SECONDS) {
                     wakeUpFromSleep("timeout");
+                }
+                break;
+
+            case WAKING:
+                if (model.isWakeMotionFinished()) {
+                    finishWake();
                 }
                 break;
 
@@ -215,23 +234,37 @@ public class LAppMinimumLive2DManager {
     }
 
     private void enterSleep(String previousStateName) {
-        if (!model.startSleepMotion()) {
+        if (!model.startSleepEntryMotion()) {
             return;
         }
 
-        currentState = CharacterState.SLEEP;
-        sleepElapsedSeconds = 0.0f;
+        currentState = CharacterState.SLEEP_ENTRY;
         model.setIdleEffectsEnabled(false);
 
         LAppMinimumPal.printLog(
                 "[APP] state changed: "
                         + previousStateName
-                        + " -> SLEEP"
+                        + " -> SLEEP_ENTRY"
         );
     }
 
     private void wakeUpFromSleep(String reason) {
-        model.stopSleepMotion();
+        if (!model.startWakeMotion()) {
+            return;
+        }
+
+        pendingWakeReason = reason;
+        currentState = CharacterState.WAKING;
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: SLEEP -> WAKING ("
+                        + reason
+                        + ")"
+        );
+    }
+
+    private void finishWake() {
+        model.finishWakeMotion();
         model.setIdleEffectsEnabled(true);
 
         currentState = CharacterState.IDLE;
@@ -240,10 +273,11 @@ public class LAppMinimumLive2DManager {
         boredPlayedForCurrentInactivity = false;
 
         LAppMinimumPal.printLog(
-                "[APP] state changed: SLEEP -> IDLE ("
-                        + reason
+                "[APP] state changed: WAKING -> IDLE ("
+                        + pendingWakeReason
                         + ")"
         );
+        pendingWakeReason = "";
     }
 
     public void onUserActivity() {
@@ -359,6 +393,7 @@ public class LAppMinimumLive2DManager {
     private float inactivityElapsedSeconds = 0.0f;
     private float sleepElapsedSeconds = 0.0f;
     private boolean boredPlayedForCurrentInactivity = false;
+    private String pendingWakeReason = "";
 
     private static final float BORED_AFTER_SECONDS = 10.0f;
     private static final float SLEEP_AFTER_SECONDS = 30.0f;
