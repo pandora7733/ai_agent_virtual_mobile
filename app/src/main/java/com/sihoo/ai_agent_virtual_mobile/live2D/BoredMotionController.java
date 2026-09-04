@@ -4,13 +4,46 @@ import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 
 public class BoredMotionController {
-    private static final float MOTION_DURATION = 4.0f;
+    // ============================================================
+    // 시간[초] — 조절 완료된 최종 고정값 (직접 수정)
+    // ============================================================
+    private static final float PHASE_HEAD_DOWN_END = 0.6f;
 
-    private static final float LOOK_LEFT_OFFSET = -5.0f;
-    private static final float LOOK_RIGHT_OFFSET = 4.0f;
-    private static final float HEAD_DOWN_OFFSET = -2.0f;
-    private static final float HEAD_TILT_OFFSET = 1.2f;
-    private static final float BODY_OFFSET = 1.5f;
+    /** 좌우 1방향(왼쪽 또는 오른쪽)으로 움직이는 시간. 클수록 느림 */
+    private static final float SWAY_HALF_SEGMENT_DURATION = 0.68f;
+
+    /** 좌우 흔들림 횟수 (왼쪽↔오른쪽 1회 = 1) */
+    private static final int SWAY_CYCLE_COUNT = 2;
+
+    /**
+     * 흔들림 구간 전체 길이.
+     * SWAY_HALF_SEGMENT_DURATION × SWAY_CYCLE_COUNT × 2 와 반드시 일치해야 함.
+     */
+    private static final float SWAY_TOTAL_DURATION =
+            SWAY_HALF_SEGMENT_DURATION * SWAY_CYCLE_COUNT * 2;
+
+    private static final float PHASE_SWAY_END =
+            PHASE_HEAD_DOWN_END + SWAY_TOTAL_DURATION;
+
+    private static final float RETURN_DURATION = 0.8f;
+    private static final float PHASE_RETURN_END =
+            PHASE_SWAY_END + RETURN_DURATION;
+
+    private static final float SETTLE_DURATION = 1.68f;
+    private static final float MOTION_DURATION =
+            PHASE_RETURN_END + SETTLE_DURATION;
+
+    private static final int LAST_SWAY_SEGMENT =
+            SWAY_CYCLE_COUNT * 2 - 1;
+
+    // ============================================================
+    // 동작 범위 — 조절 완료된 최종 고정값 (직접 수정)
+    // ============================================================
+    private static final float LOOK_LEFT_OFFSET = -6.2f;
+    private static final float LOOK_RIGHT_OFFSET = 5.7f;
+    private static final float HEAD_DOWN_OFFSET = -5.3f;
+    private static final float HEAD_TILT_OFFSET = 6.2f;
+    private static final float BODY_OFFSET = 7.8f;
 
     private final CubismId idParamAngleX;
     private final CubismId idParamAngleY;
@@ -87,58 +120,65 @@ public class BoredMotionController {
         float offsetZ = 0.0f;
         float bodyOffsetX = 0.0f;
 
-        if (elapsed < 0.6f) {
+        if (elapsed < PHASE_HEAD_DOWN_END) {
             // 지루한 듯 고개를 살짝 숙임
-            float t = smoothStep(elapsed / 0.6f);
+            float t = smoothStep(elapsed / PHASE_HEAD_DOWN_END);
             offsetY = HEAD_DOWN_OFFSET * t;
             offsetZ = HEAD_TILT_OFFSET * t;
 
-        } else if (elapsed < 1.4f) {
-            // 천천히 왼쪽을 바라봄
-            float t = smoothStep(
-                    (elapsed - 0.6f) / 0.8f
-            );
-            offsetX = lerp(0.0f, LOOK_LEFT_OFFSET, t);
-            offsetY = HEAD_DOWN_OFFSET;
-            offsetZ = HEAD_TILT_OFFSET;
-            bodyOffsetX = BODY_OFFSET * t;
+        } else if (elapsed < PHASE_SWAY_END) {
+            // 좌우로 SWAY_CYCLE_COUNT번 흔듦
+            float swayElapsed = elapsed - PHASE_HEAD_DOWN_END;
+            int segmentIndex;
+            float segmentT;
 
-        } else if (elapsed < 2.2f) {
-            // 반대쪽을 천천히 바라봄
+            if (swayElapsed >= SWAY_TOTAL_DURATION) {
+                segmentIndex = LAST_SWAY_SEGMENT;
+                segmentT = 1.0f;
+            } else {
+                segmentIndex = (int) (
+                        swayElapsed / SWAY_HALF_SEGMENT_DURATION
+                );
+                float rawT = (
+                        swayElapsed
+                                - segmentIndex * SWAY_HALF_SEGMENT_DURATION
+                ) / SWAY_HALF_SEGMENT_DURATION;
+                segmentT = smoothStep(rawT);
+            }
+
+            offsetY = HEAD_DOWN_OFFSET;
+            offsetX = swayOffsetX(segmentIndex, segmentT);
+            offsetZ = swayOffsetZ(segmentIndex, segmentT);
+            bodyOffsetX = swayBodyOffsetX(segmentIndex, segmentT);
+
+        } else if (elapsed < PHASE_RETURN_END) {
+            // sway 마지막 자세에서 정면으로 부드럽게 복귀
             float t = smoothStep(
-                    (elapsed - 1.4f) / 0.8f
+                    (elapsed - PHASE_SWAY_END) / RETURN_DURATION
             );
             offsetX = lerp(
-                    LOOK_LEFT_OFFSET,
-                    LOOK_RIGHT_OFFSET,
+                    swayOffsetX(LAST_SWAY_SEGMENT, 1.0f),
+                    0.0f,
                     t
             );
-            offsetY = HEAD_DOWN_OFFSET;
+            offsetY = lerp(HEAD_DOWN_OFFSET, 0.0f, t);
             offsetZ = lerp(
-                    HEAD_TILT_OFFSET,
-                    -HEAD_TILT_OFFSET,
+                    swayOffsetZ(LAST_SWAY_SEGMENT, 1.0f),
+                    0.0f,
                     t
             );
-            bodyOffsetX = BODY_OFFSET * (1.0f - t);
-
-        } else if (elapsed < 3.0f) {
-            // 다시 정면으로 돌아옴
-            float t = smoothStep(
-                    (elapsed - 2.2f) / 0.8f
+            bodyOffsetX = lerp(
+                    swayBodyOffsetX(LAST_SWAY_SEGMENT, 1.0f),
+                    0.0f,
+                    t
             );
-            offsetX = lerp(LOOK_RIGHT_OFFSET, 0.0f, t);
-            offsetY = HEAD_DOWN_OFFSET * (1.0f - t);
-            offsetZ = lerp(-HEAD_TILT_OFFSET, 0.0f, t);
 
         } else {
-            // 마지막 자세를 안정시키며 기본 자세로 복귀
-            float t = smoothStep(
-                    (elapsed - 3.0f) / 1.0f
-            );
+            // 마지막 자세를 안정시키며 기본 자세 유지
             offsetX = 0.0f;
             offsetY = 0.0f;
             offsetZ = 0.0f;
-            bodyOffsetX = 0.0f * t;
+            bodyOffsetX = 0.0f;
         }
 
         model.setParameterValue(
@@ -165,6 +205,36 @@ public class BoredMotionController {
         }
 
         return false;
+    }
+
+    private static float swayOffsetX(int segmentIndex, float segmentT) {
+        if (segmentIndex == 0) {
+            return lerp(0.0f, LOOK_LEFT_OFFSET, segmentT);
+        }
+        if (segmentIndex % 2 == 1) {
+            return lerp(LOOK_LEFT_OFFSET, LOOK_RIGHT_OFFSET, segmentT);
+        }
+        return lerp(LOOK_RIGHT_OFFSET, LOOK_LEFT_OFFSET, segmentT);
+    }
+
+    private static float swayOffsetZ(int segmentIndex, float segmentT) {
+        if (segmentIndex == 0) {
+            return HEAD_TILT_OFFSET;
+        }
+        if (segmentIndex % 2 == 1) {
+            return lerp(HEAD_TILT_OFFSET, -HEAD_TILT_OFFSET, segmentT);
+        }
+        return lerp(-HEAD_TILT_OFFSET, HEAD_TILT_OFFSET, segmentT);
+    }
+
+    private static float swayBodyOffsetX(int segmentIndex, float segmentT) {
+        if (segmentIndex == 0) {
+            return lerp(0.0f, BODY_OFFSET, segmentT);
+        }
+        if (segmentIndex % 2 == 1) {
+            return lerp(BODY_OFFSET, 0.0f, segmentT);
+        }
+        return lerp(0.0f, BODY_OFFSET, segmentT);
     }
 
     private void applyBasePose(CubismModel model) {
