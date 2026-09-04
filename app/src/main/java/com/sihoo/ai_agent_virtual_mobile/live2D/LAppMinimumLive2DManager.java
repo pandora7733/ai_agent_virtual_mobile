@@ -129,6 +129,10 @@ public class LAppMinimumLive2DManager {
             );
         }
 
+        updateInactivityTimer();
+
+
+
         // 必要があればここで乗算する
         if (viewMatrix != null) {
             viewMatrix.multiplyByMatrix(projection);
@@ -147,6 +151,67 @@ public class LAppMinimumLive2DManager {
         CubismOffscreenManagerAndroid.getInstance().endFrameProcess();
         // もし余っているオフスクリーンのリソースを解放したい場合行う処理
         CubismOffscreenManagerAndroid.getInstance().releaseStaleRenderTextures();
+    }
+
+    private void updateInactivityTimer() {
+        if (petPreferences == null) {
+            return;
+        }
+
+        // 최초 접속 모션 중에는 대기 시간을 측정하지 않음
+        if (currentState != CharacterState.IDLE
+                && currentState != CharacterState.BORED) {
+            return;
+        }
+
+        float deltaTime = Math.max(
+                0.0f,
+                Math.min(
+                        LAppMinimumPal.getDeltaTime(),
+                        0.1f
+                )
+        );
+
+        if (currentState == CharacterState.IDLE) {
+            idleElapsedSeconds += deltaTime;
+
+            if (idleElapsedSeconds >= BORED_AFTER_SECONDS) {
+                if (model.startBoredMotion()) {
+                    currentState = CharacterState.BORED;
+                    idleElapsedSeconds = 0.0f;
+
+                    LAppMinimumPal.printLog(
+                            "[APP] state changed: IDLE -> BORED"
+                    );
+                } else {
+                    idleElapsedSeconds = 0.0f;
+                }
+            }
+        } else if (model.isBoredMotionFinished()) {
+            currentState = CharacterState.IDLE;
+            idleElapsedSeconds = 0.0f;
+
+            LAppMinimumPal.printLog(
+                    "[APP] state changed: BORED -> IDLE"
+            );
+        }
+    }
+
+    public void onUserActivity() {
+        if (currentState == CharacterState.FIRST_VISIT) {
+            return;
+        }
+
+        idleElapsedSeconds = 0.0f;
+
+        if (currentState == CharacterState.BORED) {
+            model.stopBoredMotion();
+            currentState = CharacterState.IDLE;
+
+            LAppMinimumPal.printLog(
+                    "[APP] state changed: BORED -> IDLE"
+            );
+        }
     }
 
     /**
@@ -239,5 +304,8 @@ public class LAppMinimumLive2DManager {
 
     private CharacterState currentState = CharacterState.LOADING;
     private PetPreferences petPreferences;
+    private float idleElapsedSeconds = 0.0f;
+
+    private static final float BORED_AFTER_SECONDS = 10.0f;
 }
 

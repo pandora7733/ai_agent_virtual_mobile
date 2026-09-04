@@ -223,6 +223,9 @@ public class LAppMinimumView implements AutoCloseable {
      */
     public void onTouchesBegan(float pointX, float pointY) {
         touchManager.touchesBegan(pointX, pointY);
+
+        LAppMinimumLive2DManager.getInstance()
+                .onUserActivity();
     }
 
     public void onTouchesMoved(float pointX, float pointY) {

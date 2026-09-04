@@ -65,6 +65,12 @@ public class LAppMinimumModel extends CubismUserModel {
                 idParamEyeLOpen,
                 idParamEyeROpen
         );
+        boredMotionController = new BoredMotionController(
+                idParamAngleX,
+                idParamAngleY,
+                idParamAngleZ,
+                idParamBodyAngleX
+        );
 
         modelHomeDirectory = modelDirName;
     }
@@ -128,7 +134,8 @@ public class LAppMinimumModel extends CubismUserModel {
             final String idleGroup = LAppDefine.MotionGroup.IDLE.getId();
 
             // model3.json に Idle モーションが登録されていない場合は再生を試みない。
-            if (modelSetting.getMotionCount(idleGroup) > 0) {
+            if (!boredMotionController.isActive()
+                    && modelSetting.getMotionCount(idleGroup) > 0) {
                 startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
             }
         } else {
@@ -137,6 +144,11 @@ public class LAppMinimumModel extends CubismUserModel {
         }
 
         firstVisitMotionController.update(
+                model,
+                deltaTimeSeconds
+        );
+
+        boredMotionController.update(
                 model,
                 deltaTimeSeconds
         );
@@ -173,6 +185,19 @@ public class LAppMinimumModel extends CubismUserModel {
 
     public boolean isFirstVisitMotionFinished() {
         return firstVisitMotionController.isFinished();
+    }
+
+    public boolean startBoredMotion() {
+        motionManager.stopAllMotions();
+        return boredMotionController.start(model);
+    }
+
+    public void stopBoredMotion() {
+        boredMotionController.stop(model);
+    }
+
+    public boolean isBoredMotionFinished() {
+        return boredMotionController.isFinished();
     }
 
     /**
@@ -627,6 +652,7 @@ public class LAppMinimumModel extends CubismUserModel {
     private final CubismId idParamEyeROpen;
     private final CubismId idParamBreath;
     private final FirstVisitMotionController firstVisitMotionController;
+    private final BoredMotionController boredMotionController;
     private final NaturalBlinkController naturalBlinkController;
     private boolean idleEffectsEnabled = false;
     /**
