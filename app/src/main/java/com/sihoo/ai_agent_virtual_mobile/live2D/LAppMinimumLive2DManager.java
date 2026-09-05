@@ -505,8 +505,8 @@ public class LAppMinimumLive2DManager {
     private boolean boredPlayedForCurrentInactivity = false;
     private String pendingWakeReason = "";
 
-    private static final float BORED_AFTER_SECONDS = 10.0f;
-    private static final float SLEEP_AFTER_SECONDS = 30.0f;
-    private static final float SLEEP_DURATION_SECONDS = 20.0f;
+    private static final float BORED_AFTER_SECONDS = 5.0f * 60.0f;
+    private static final float SLEEP_AFTER_SECONDS = 8.0f * 60.0f;
+    private static final float SLEEP_DURATION_SECONDS = 8.0f * 60.0f;
 }
 
