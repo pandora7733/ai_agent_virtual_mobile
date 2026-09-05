@@ -5,6 +5,8 @@ public enum CharacterState {
     FIRST_VISIT,
     IDLE,
     BORED,
+    HEAD_PAT,
+    HEAD_DOUBLE_TAP,
     SLEEP_ENTRY,
     SLEEP,
     WAKING

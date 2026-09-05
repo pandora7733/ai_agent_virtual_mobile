@@ -12,6 +12,7 @@ import com.sihoo.ai_agent_virtual_mobile.live2D.demo.TouchManager;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.math.CubismViewMatrix;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRenderTargetAndroid;
+import android.os.SystemClock;
 import android.util.Log;
 
 public class LAppMinimumView implements AutoCloseable {
@@ -23,6 +24,11 @@ public class LAppMinimumView implements AutoCloseable {
     private static final float HEAD_CENTER_Y = 0.70f;
     private static final float LOOK_RANGE_X = 0.67f;
     private static final float LOOK_RANGE_Y = 1.45f;
+    private static final float HEAD_HIT_RADIUS_X = 0.38f;
+    private static final float HEAD_HIT_RADIUS_Y = 0.45f;
+    private static final float DRAG_START_DISTANCE_PX = 24.0f;
+    private static final long DOUBLE_TAP_MAX_INTERVAL_MS = 320L;
+    private static final float DOUBLE_TAP_MAX_DISTANCE_PX = 40.0f; 
 
     public enum RenderingTarget {
         NONE,   // デフォルトのフレームバッファにレンダリング
@@ -224,8 +230,25 @@ public class LAppMinimumView implements AutoCloseable {
     public void onTouchesBegan(float pointX, float pointY) {
         touchManager.touchesBegan(pointX, pointY);
 
-        LAppMinimumLive2DManager.getInstance()
-                .onUserActivity();
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        ignoreHeadGestureThisTouch = manager.onUserActivity();
+
+        float viewX = transformViewX(pointX);
+        float viewY = transformViewY(pointY);
+        boolean insideHead = isInsideHead(viewX, viewY);
+
+        touchStartX = pointX;
+        touchStartY = pointY;
+        touchStartedOnHead = !ignoreHeadGestureThisTouch
+                && manager.canStartHeadInteraction()
+                && insideHead;
+        isHeadPatting = false;
+
+        LAppMinimumPal.printLog(
+                "[APP] HEAD_HIT=" + insideHead
+                        + ", startHeadGesture=" + touchStartedOnHead
+        );
     }
 
     public void onTouchesMoved(float pointX, float pointY) {
@@ -233,6 +256,28 @@ public class LAppMinimumView implements AutoCloseable {
 
         float viewX = transformViewX(pointX);
         float viewY = transformViewY(pointY);
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+
+        if (touchStartedOnHead) {
+            float dx = pointX - touchStartX;
+            float dy = pointY - touchStartY;
+            float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
+            if (!isHeadPatting && distance >= DRAG_START_DISTANCE_PX) {
+                isHeadPatting = true;
+            }
+
+            if (isHeadPatting) {
+                manager.onHeadPat(
+                        toPatCoordinateX(viewX),
+                        toPatCoordinateY(viewY)
+                );
+                return;
+            }
+
+            return;
+        }
 
         float relativeX = viewX - HEAD_CENTER_X;
         float relativeY = viewY - HEAD_CENTER_Y;
@@ -240,7 +285,7 @@ public class LAppMinimumView implements AutoCloseable {
         float lookX = clamp(relativeX / LOOK_RANGE_X, -1.0f, 1.0f);
         float lookY = clamp(relativeY / LOOK_RANGE_Y, -1.0f, 1.0f);
 
-        LAppMinimumLive2DManager.getInstance().onDrag(lookX, lookY);
+        manager.onDrag(lookX, lookY);
     }
 
     /**
@@ -264,6 +309,12 @@ public class LAppMinimumView implements AutoCloseable {
 
         boolean hasPreviousPinch =
                 touchManager.getLastTouchDistance() > 0.0f;
+
+        if (isHeadPatting) {
+            LAppMinimumLive2DManager.getInstance().cancelHeadPat();
+            isHeadPatting = false;
+            touchStartedOnHead = false;
+        }
 
         touchManager.touchesMoved(x1, y1, x2, y2);
 
@@ -317,15 +368,80 @@ public class LAppMinimumView implements AutoCloseable {
      * @param pointY スクリーンY座標
      */
     public void onTouchesEnded(float pointX, float pointY) {
-        // タッチ終了
-        LAppMinimumLive2DManager live2DManager = LAppMinimumLive2DManager.getInstance();
-        live2DManager.onDrag(0.0f, 0.0f);
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        manager.onDrag(0.0f, 0.0f);
 
-        // シングルタップ
-        // 論理座標変換した座標を取得
-        float x = deviceToScreen.transformX(touchManager.getLastX());
-        // 論理座標変換した座標を取得
-        float y = deviceToScreen.transformY(touchManager.getLastY());
+        if (isHeadPatting) {
+            manager.onHeadPatEnd();
+            isHeadPatting = false;
+            touchStartedOnHead = false;
+            lastTapWasOnHead = false;
+            return;
+        }
+
+        float dx = pointX - touchStartX;
+        float dy = pointY - touchStartY;
+        float moveDistance = (float) Math.sqrt(dx * dx + dy * dy);
+        boolean shortTap = touchStartedOnHead
+                && moveDistance < DRAG_START_DISTANCE_PX;
+
+        long now = SystemClock.uptimeMillis();
+
+        if (shortTap) {
+            boolean isDoubleTap = lastTapWasOnHead
+                    && (now - lastTapTimeMs) <= DOUBLE_TAP_MAX_INTERVAL_MS
+                    && distance(pointX, pointY, lastTapX, lastTapY)
+                    <= DOUBLE_TAP_MAX_DISTANCE_PX;
+
+            if (isDoubleTap) {
+                manager.onHeadDoubleTap();
+                lastTapWasOnHead = false;
+            } else {
+                lastTapTimeMs = now;
+                lastTapX = pointX;
+                lastTapY = pointY;
+                lastTapWasOnHead = true;
+            }
+        } else {
+            lastTapWasOnHead = false;
+        }
+
+        touchStartedOnHead = false;
+        ignoreHeadGestureThisTouch = false;
+    }
+
+    private boolean isInsideHead(float viewX, float viewY) {
+        float dx = (viewX - HEAD_CENTER_X) / HEAD_HIT_RADIUS_X;
+        float dy = (viewY - HEAD_CENTER_Y) / HEAD_HIT_RADIUS_Y;
+        return (dx * dx) + (dy * dy) <= 1.0f;
+    }
+
+    private float toPatCoordinateX(float viewX) {
+        return clamp(
+                (viewX - HEAD_CENTER_X) / HEAD_HIT_RADIUS_X,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private float toPatCoordinateY(float viewY) {
+        return clamp(
+                (viewY - HEAD_CENTER_Y) / HEAD_HIT_RADIUS_Y,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private static float distance(
+            float x1,
+            float y1,
+            float x2,
+            float y2
+    ) {
+        float dx = x1 - x2;
+        float dy = y1 - y2;
+        return (float) Math.sqrt(dx * dx + dy * dy);
     }
 
     /**
@@ -418,6 +534,16 @@ public class LAppMinimumView implements AutoCloseable {
     private LAppMinimumSprite renderingSprite;
 
     private final TouchManager touchManager = new TouchManager();
+
+    private float touchStartX;
+    private float touchStartY;
+    private boolean touchStartedOnHead;
+    private boolean isHeadPatting;
+    private boolean ignoreHeadGestureThisTouch;
+    private long lastTapTimeMs;
+    private float lastTapX;
+    private float lastTapY;
+    private boolean lastTapWasOnHead;
 
     /**
      * シェーダー作成委譲クラス

@@ -71,6 +71,14 @@ public class LAppMinimumModel extends CubismUserModel {
                 idParamAngleZ,
                 idParamBodyAngleX
         );
+        headPatMotionController = new HeadPatMotionController(
+                idParamAngleX,
+                idParamAngleY,
+                idParamAngleZ
+        );
+        headDoubleTapMotionController = new HeadDoubleTapMotionController(
+                idParamAngleY
+        );
         sleepEntryTransition = new ParameterTransitionController();
         wakeTransition = new ParameterTransitionController();
 
@@ -133,6 +141,7 @@ public class LAppMinimumModel extends CubismUserModel {
 
         // モーションの再生がない場合、待機モーションの中からランダムで再生する
         if (!isSleepTransitionActive()
+                && !isHeadInteractionActive()
                 && motionManager.isFinished()) {
             final String idleGroup = LAppDefine.MotionGroup.IDLE.getId();
 
@@ -142,7 +151,7 @@ public class LAppMinimumModel extends CubismUserModel {
                     && modelSetting.getMotionCount(idleGroup) > 0) {
                 startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
             }
-        } else if (!isSleepTransitionActive()) {
+        } else if (!isSleepTransitionActive() && !isHeadInteractionActive()) {
             // モーションを更新
             motionUpdated = motionManager.updateMotion(model, deltaTimeSeconds);
         }
@@ -155,12 +164,15 @@ public class LAppMinimumModel extends CubismUserModel {
                 deltaTimeSeconds
         );
 
-        if (!isSleepTransitionActive()) {
+        if (!isSleepTransitionActive() && !isHeadInteractionActive()) {
             boredMotionController.update(
                     model,
                     deltaTimeSeconds
             );
         }
+
+        headPatMotionController.update(model, deltaTimeSeconds);
+        headDoubleTapMotionController.update(model, deltaTimeSeconds);
 
         if (idleEffectsEnabled) {
             naturalBlinkController.update(
@@ -209,6 +221,53 @@ public class LAppMinimumModel extends CubismUserModel {
         return boredMotionController.isFinished();
     }
 
+    public boolean startHeadPatMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        return headPatMotionController.start(model);
+    }
+
+    public void updateHeadPat(float patX, float patY) {
+        headPatMotionController.setTarget(patX, patY);
+    }
+
+    public void endHeadPatMotion() {
+        headPatMotionController.startRelease();
+    }
+
+    public void stopHeadPatMotion() {
+        headPatMotionController.stop(model);
+    }
+
+    public boolean isHeadPatFinished() {
+        return headPatMotionController.isFinished();
+    }
+
+    public boolean isHeadPatReleasing() {
+        return headPatMotionController.isReleasing();
+    }
+
+    public boolean startHeadDoubleTapMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        return headDoubleTapMotionController.start(model);
+    }
+
+    public void stopHeadDoubleTapMotion() {
+        headDoubleTapMotionController.stop(model);
+    }
+
+    public boolean isHeadDoubleTapFinished() {
+        return headDoubleTapMotionController.isFinished();
+    }
+
+    public boolean isHeadInteractionActive() {
+        return headPatMotionController.isActive()
+                || headDoubleTapMotionController.isActive();
+    }
+
     /**
      * Idle → Sleep 진입 전환 (기본 1.8초).
      * {@link #SLEEP_ENTRY_DURATION_SECONDS} 값을 수정해 조절한다.
@@ -216,6 +275,8 @@ public class LAppMinimumModel extends CubismUserModel {
     public boolean startSleepEntryMotion() {
         motionManager.stopAllMotions();
         boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
         sleepMotionActive = false;
 
         capturePreSleepPose();
@@ -863,6 +924,8 @@ public class LAppMinimumModel extends CubismUserModel {
     private final CubismId idParamBreath;
     private final FirstVisitMotionController firstVisitMotionController;
     private final BoredMotionController boredMotionController;
+    private final HeadPatMotionController headPatMotionController;
+    private final HeadDoubleTapMotionController headDoubleTapMotionController;
     private final NaturalBlinkController naturalBlinkController;
     private final ParameterTransitionController sleepEntryTransition;
     private final ParameterTransitionController wakeTransition;

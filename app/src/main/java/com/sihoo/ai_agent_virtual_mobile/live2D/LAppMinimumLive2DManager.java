@@ -201,6 +201,27 @@ public class LAppMinimumLive2DManager {
                 }
                 break;
 
+            case HEAD_PAT:
+            case HEAD_DOUBLE_TAP:
+                if (currentState == CharacterState.HEAD_PAT
+                        && model.isHeadPatFinished()) {
+                    currentState = CharacterState.IDLE;
+                    inactivityElapsedSeconds = 0.0f;
+
+                    LAppMinimumPal.printLog(
+                            "[APP] state changed: HEAD_PAT -> IDLE"
+                    );
+                } else if (currentState == CharacterState.HEAD_DOUBLE_TAP
+                        && model.isHeadDoubleTapFinished()) {
+                    currentState = CharacterState.IDLE;
+                    inactivityElapsedSeconds = 0.0f;
+
+                    LAppMinimumPal.printLog(
+                            "[APP] state changed: HEAD_DOUBLE_TAP -> IDLE"
+                    );
+                }
+                break;
+
             case SLEEP_ENTRY:
                 if (model.isSleepEntryFinished()) {
                     if (model.startSleepLoopMotion()) {
@@ -280,9 +301,9 @@ public class LAppMinimumLive2DManager {
         pendingWakeReason = "";
     }
 
-    public void onUserActivity() {
+    public boolean onUserActivity() {
         if (currentState == CharacterState.FIRST_VISIT) {
-            return;
+            return true;
         }
 
         inactivityElapsedSeconds = 0.0f;
@@ -295,9 +316,96 @@ public class LAppMinimumLive2DManager {
             LAppMinimumPal.printLog(
                     "[APP] state changed: BORED -> IDLE (user activity)"
             );
+            return true;
         } else if (currentState == CharacterState.SLEEP) {
             wakeUpFromSleep("user activity");
+            return true;
         }
+
+        return false;
+    }
+
+    public boolean canStartHeadInteraction() {
+        return currentState == CharacterState.IDLE
+                || currentState == CharacterState.HEAD_PAT
+                || currentState == CharacterState.HEAD_DOUBLE_TAP;
+    }
+
+    public void onHeadPat(float patX, float patY) {
+        if (model == null) {
+            return;
+        }
+
+        if (currentState == CharacterState.HEAD_DOUBLE_TAP) {
+            model.stopHeadDoubleTapMotion();
+            currentState = CharacterState.IDLE;
+        }
+
+        if (currentState == CharacterState.HEAD_PAT
+                && model.isHeadPatReleasing()) {
+            if (!model.startHeadPatMotion()) {
+                return;
+            }
+        }
+
+        if (currentState == CharacterState.IDLE) {
+            if (!model.startHeadPatMotion()) {
+                return;
+            }
+
+            currentState = CharacterState.HEAD_PAT;
+            inactivityElapsedSeconds = 0.0f;
+            boredPlayedForCurrentInactivity = false;
+            model.setIdleEffectsEnabled(true);
+
+            LAppMinimumPal.printLog(
+                    "[APP] state changed: IDLE -> HEAD_PAT"
+            );
+        }
+
+        if (currentState == CharacterState.HEAD_PAT) {
+            model.updateHeadPat(patX, patY);
+        }
+    }
+
+    public void onHeadPatEnd() {
+        if (currentState != CharacterState.HEAD_PAT) {
+            return;
+        }
+
+        model.endHeadPatMotion();
+    }
+
+    public void cancelHeadPat() {
+        if (currentState != CharacterState.HEAD_PAT) {
+            return;
+        }
+
+        model.stopHeadPatMotion();
+        currentState = CharacterState.IDLE;
+        inactivityElapsedSeconds = 0.0f;
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: HEAD_PAT -> IDLE (cancel)"
+        );
+    }
+
+    public void onHeadDoubleTap() {
+        if (model == null || currentState != CharacterState.IDLE) {
+            return;
+        }
+
+        if (!model.startHeadDoubleTapMotion()) {
+            return;
+        }
+
+        currentState = CharacterState.HEAD_DOUBLE_TAP;
+        inactivityElapsedSeconds = 0.0f;
+        boredPlayedForCurrentInactivity = false;
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: IDLE -> HEAD_DOUBLE_TAP"
+        );
     }
 
     /**
@@ -343,6 +451,8 @@ public class LAppMinimumLive2DManager {
                 - scaleRatio * (previousCenterY - userOffsetY);
 
         userScale = newScale;
+
+        cancelHeadPat();
     }
 
     /**
