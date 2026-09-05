@@ -26,6 +26,10 @@ public class LAppMinimumView implements AutoCloseable {
     private static final float LOOK_RANGE_Y = 1.45f;
     private static final float HEAD_HIT_RADIUS_X = 0.38f;
     private static final float HEAD_HIT_RADIUS_Y = 0.45f;
+    private static final float BODY_CENTER_X = 0.00f;
+    private static final float BODY_CENTER_Y = -0.05f;
+    private static final float BODY_HIT_RADIUS_X = 0.42f;
+    private static final float BODY_HIT_RADIUS_Y = 0.55f;
     private static final float DRAG_START_DISTANCE_PX = 24.0f;
     private static final long DOUBLE_TAP_MAX_INTERVAL_MS = 320L;
     private static final float DOUBLE_TAP_MAX_DISTANCE_PX = 40.0f; 
@@ -237,17 +241,24 @@ public class LAppMinimumView implements AutoCloseable {
         float viewX = transformViewX(pointX);
         float viewY = transformViewY(pointY);
         boolean insideHead = isInsideHead(viewX, viewY);
+        boolean insideBody = !insideHead && isInsideBody(viewX, viewY);
 
         touchStartX = pointX;
         touchStartY = pointY;
         touchStartedOnHead = !ignoreHeadGestureThisTouch
                 && manager.canStartHeadInteraction()
                 && insideHead;
+        touchStartedOnBody = !ignoreHeadGestureThisTouch
+                && manager.canStartBodyInteraction()
+                && insideBody;
         isHeadPatting = false;
+        isBodyStroking = false;
 
         LAppMinimumPal.printLog(
                 "[APP] HEAD_HIT=" + insideHead
+                        + ", BODY_HIT=" + insideBody
                         + ", startHeadGesture=" + touchStartedOnHead
+                        + ", startBodyGesture=" + touchStartedOnBody
         );
     }
 
@@ -272,6 +283,26 @@ public class LAppMinimumView implements AutoCloseable {
                 manager.onHeadPat(
                         toPatCoordinateX(viewX),
                         toPatCoordinateY(viewY)
+                );
+                return;
+            }
+
+            return;
+        }
+
+        if (touchStartedOnBody) {
+            float dx = pointX - touchStartX;
+            float dy = pointY - touchStartY;
+            float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
+            if (!isBodyStroking && distance >= DRAG_START_DISTANCE_PX) {
+                isBodyStroking = true;
+            }
+
+            if (isBodyStroking) {
+                manager.onBodyStroke(
+                        toBodyStrokeX(viewX),
+                        toBodyStrokeY(viewY)
                 );
                 return;
             }
@@ -314,6 +345,12 @@ public class LAppMinimumView implements AutoCloseable {
             LAppMinimumLive2DManager.getInstance().cancelHeadPat();
             isHeadPatting = false;
             touchStartedOnHead = false;
+        }
+
+        if (isBodyStroking) {
+            LAppMinimumLive2DManager.getInstance().cancelBodyStroke();
+            isBodyStroking = false;
+            touchStartedOnBody = false;
         }
 
         touchManager.touchesMoved(x1, y1, x2, y2);
@@ -377,18 +414,30 @@ public class LAppMinimumView implements AutoCloseable {
             isHeadPatting = false;
             touchStartedOnHead = false;
             lastTapWasOnHead = false;
+            lastTapWasOnBody = false;
+            return;
+        }
+
+        if (isBodyStroking) {
+            manager.onBodyStrokeEnd();
+            isBodyStroking = false;
+            touchStartedOnBody = false;
+            lastTapWasOnHead = false;
+            lastTapWasOnBody = false;
             return;
         }
 
         float dx = pointX - touchStartX;
         float dy = pointY - touchStartY;
         float moveDistance = (float) Math.sqrt(dx * dx + dy * dy);
-        boolean shortTap = touchStartedOnHead
+        boolean shortHeadTap = touchStartedOnHead
+                && moveDistance < DRAG_START_DISTANCE_PX;
+        boolean shortBodyTap = touchStartedOnBody
                 && moveDistance < DRAG_START_DISTANCE_PX;
 
         long now = SystemClock.uptimeMillis();
 
-        if (shortTap) {
+        if (shortHeadTap) {
             boolean isDoubleTap = lastTapWasOnHead
                     && (now - lastTapTimeMs) <= DOUBLE_TAP_MAX_INTERVAL_MS
                     && distance(pointX, pointY, lastTapX, lastTapY)
@@ -397,18 +446,61 @@ public class LAppMinimumView implements AutoCloseable {
             if (isDoubleTap) {
                 manager.onHeadDoubleTap();
                 lastTapWasOnHead = false;
+                lastTapWasOnBody = false;
             } else {
                 lastTapTimeMs = now;
                 lastTapX = pointX;
                 lastTapY = pointY;
                 lastTapWasOnHead = true;
+                lastTapWasOnBody = false;
+            }
+        } else if (shortBodyTap) {
+            boolean isDoubleTap = lastTapWasOnBody
+                    && (now - lastTapTimeMs) <= DOUBLE_TAP_MAX_INTERVAL_MS
+                    && distance(pointX, pointY, lastTapX, lastTapY)
+                    <= DOUBLE_TAP_MAX_DISTANCE_PX;
+
+            if (isDoubleTap) {
+                manager.onBodyDoubleTap();
+                lastTapWasOnHead = false;
+                lastTapWasOnBody = false;
+            } else {
+                lastTapTimeMs = now;
+                lastTapX = pointX;
+                lastTapY = pointY;
+                lastTapWasOnHead = false;
+                lastTapWasOnBody = true;
             }
         } else {
             lastTapWasOnHead = false;
+            lastTapWasOnBody = false;
         }
 
         touchStartedOnHead = false;
+        touchStartedOnBody = false;
         ignoreHeadGestureThisTouch = false;
+    }
+
+    private boolean isInsideBody(float viewX, float viewY) {
+        float dx = (viewX - BODY_CENTER_X) / BODY_HIT_RADIUS_X;
+        float dy = (viewY - BODY_CENTER_Y) / BODY_HIT_RADIUS_Y;
+        return (dx * dx) + (dy * dy) <= 1.0f;
+    }
+
+    private float toBodyStrokeX(float viewX) {
+        return clamp(
+                (viewX - BODY_CENTER_X) / BODY_HIT_RADIUS_X,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private float toBodyStrokeY(float viewY) {
+        return clamp(
+                (viewY - BODY_CENTER_Y) / BODY_HIT_RADIUS_Y,
+                -1.0f,
+                1.0f
+        );
     }
 
     private boolean isInsideHead(float viewX, float viewY) {
@@ -538,12 +630,15 @@ public class LAppMinimumView implements AutoCloseable {
     private float touchStartX;
     private float touchStartY;
     private boolean touchStartedOnHead;
+    private boolean touchStartedOnBody;
     private boolean isHeadPatting;
+    private boolean isBodyStroking;
     private boolean ignoreHeadGestureThisTouch;
     private long lastTapTimeMs;
     private float lastTapX;
     private float lastTapY;
     private boolean lastTapWasOnHead;
+    private boolean lastTapWasOnBody;
 
     /**
      * シェーダー作成委譲クラス

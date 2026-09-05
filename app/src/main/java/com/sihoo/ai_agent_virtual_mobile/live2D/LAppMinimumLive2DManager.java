@@ -203,6 +203,8 @@ public class LAppMinimumLive2DManager {
 
             case HEAD_PAT:
             case HEAD_DOUBLE_TAP:
+            case BODY_STROKE:
+            case BODY_DOUBLE_TAP:
                 if (currentState == CharacterState.HEAD_PAT
                         && model.isHeadPatFinished()) {
                     currentState = CharacterState.IDLE;
@@ -218,6 +220,22 @@ public class LAppMinimumLive2DManager {
 
                     LAppMinimumPal.printLog(
                             "[APP] state changed: HEAD_DOUBLE_TAP -> IDLE"
+                    );
+                } else if (currentState == CharacterState.BODY_STROKE
+                        && model.isBodyStrokeFinished()) {
+                    currentState = CharacterState.IDLE;
+                    inactivityElapsedSeconds = 0.0f;
+
+                    LAppMinimumPal.printLog(
+                            "[APP] state changed: BODY_STROKE -> IDLE"
+                    );
+                } else if (currentState == CharacterState.BODY_DOUBLE_TAP
+                        && model.isBodyDoubleTapFinished()) {
+                    currentState = CharacterState.IDLE;
+                    inactivityElapsedSeconds = 0.0f;
+
+                    LAppMinimumPal.printLog(
+                            "[APP] state changed: BODY_DOUBLE_TAP -> IDLE"
                     );
                 }
                 break;
@@ -328,13 +346,21 @@ public class LAppMinimumLive2DManager {
     public boolean canStartHeadInteraction() {
         return currentState == CharacterState.IDLE
                 || currentState == CharacterState.HEAD_PAT
-                || currentState == CharacterState.HEAD_DOUBLE_TAP;
+                || currentState == CharacterState.HEAD_DOUBLE_TAP
+                || currentState == CharacterState.BODY_STROKE
+                || currentState == CharacterState.BODY_DOUBLE_TAP;
+    }
+
+    public boolean canStartBodyInteraction() {
+        return canStartHeadInteraction();
     }
 
     public void onHeadPat(float patX, float patY) {
         if (model == null) {
             return;
         }
+
+        stopBodyInteractionForHead();
 
         if (currentState == CharacterState.HEAD_DOUBLE_TAP) {
             model.stopHeadDoubleTapMotion();
@@ -408,6 +434,105 @@ public class LAppMinimumLive2DManager {
         );
     }
 
+    public void onBodyStroke(float strokeX, float strokeY) {
+        if (model == null) {
+            return;
+        }
+
+        stopHeadInteractionForBody();
+
+        if (currentState == CharacterState.BODY_DOUBLE_TAP) {
+            model.stopBodyDoubleTapMotion();
+            currentState = CharacterState.IDLE;
+        }
+
+        if (currentState == CharacterState.BODY_STROKE
+                && model.isBodyStrokeReleasing()) {
+            if (!model.startBodyStrokeMotion()) {
+                return;
+            }
+        }
+
+        if (currentState == CharacterState.IDLE) {
+            if (!model.startBodyStrokeMotion()) {
+                return;
+            }
+
+            currentState = CharacterState.BODY_STROKE;
+            inactivityElapsedSeconds = 0.0f;
+            boredPlayedForCurrentInactivity = false;
+            model.setIdleEffectsEnabled(true);
+
+            LAppMinimumPal.printLog(
+                    "[APP] state changed: IDLE -> BODY_STROKE"
+            );
+        }
+
+        if (currentState == CharacterState.BODY_STROKE) {
+            model.updateBodyStroke(strokeX, strokeY);
+        }
+    }
+
+    public void onBodyStrokeEnd() {
+        if (currentState != CharacterState.BODY_STROKE) {
+            return;
+        }
+
+        model.endBodyStrokeMotion();
+    }
+
+    public void cancelBodyStroke() {
+        if (currentState != CharacterState.BODY_STROKE) {
+            return;
+        }
+
+        model.stopBodyStrokeMotion();
+        currentState = CharacterState.IDLE;
+        inactivityElapsedSeconds = 0.0f;
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: BODY_STROKE -> IDLE (cancel)"
+        );
+    }
+
+    public void onBodyDoubleTap() {
+        if (model == null || currentState != CharacterState.IDLE) {
+            return;
+        }
+
+        if (!model.startBodyDoubleTapMotion()) {
+            return;
+        }
+
+        currentState = CharacterState.BODY_DOUBLE_TAP;
+        inactivityElapsedSeconds = 0.0f;
+        boredPlayedForCurrentInactivity = false;
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: IDLE -> BODY_DOUBLE_TAP"
+        );
+    }
+
+    private void stopBodyInteractionForHead() {
+        if (currentState == CharacterState.BODY_STROKE) {
+            model.stopBodyStrokeMotion();
+            currentState = CharacterState.IDLE;
+        } else if (currentState == CharacterState.BODY_DOUBLE_TAP) {
+            model.stopBodyDoubleTapMotion();
+            currentState = CharacterState.IDLE;
+        }
+    }
+
+    private void stopHeadInteractionForBody() {
+        if (currentState == CharacterState.HEAD_PAT) {
+            model.stopHeadPatMotion();
+            currentState = CharacterState.IDLE;
+        } else if (currentState == CharacterState.HEAD_DOUBLE_TAP) {
+            model.stopHeadDoubleTapMotion();
+            currentState = CharacterState.IDLE;
+        }
+    }
+
     /**
      * 画面をドラッグした時の処理
      *
@@ -453,6 +578,7 @@ public class LAppMinimumLive2DManager {
         userScale = newScale;
 
         cancelHeadPat();
+        cancelBodyStroke();
     }
 
     /**

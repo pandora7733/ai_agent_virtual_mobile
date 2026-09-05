@@ -7,6 +7,8 @@ public enum CharacterState {
     BORED,
     HEAD_PAT,
     HEAD_DOUBLE_TAP,
+    BODY_STROKE,
+    BODY_DOUBLE_TAP,
     SLEEP_ENTRY,
     SLEEP,
     WAKING

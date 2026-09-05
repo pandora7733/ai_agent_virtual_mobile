@@ -79,6 +79,15 @@ public class LAppMinimumModel extends CubismUserModel {
         headDoubleTapMotionController = new HeadDoubleTapMotionController(
                 idParamAngleY
         );
+        bodyStrokeMotionController = new BodyStrokeMotionController(
+                idParamAngleX,
+                idParamAngleZ,
+                idParamBodyAngleX
+        );
+        bodyDoubleTapMotionController = new BodyDoubleTapMotionController(
+                idParamAngleY,
+                idParamBodyAngleX
+        );
         sleepEntryTransition = new ParameterTransitionController();
         wakeTransition = new ParameterTransitionController();
 
@@ -141,7 +150,7 @@ public class LAppMinimumModel extends CubismUserModel {
 
         // モーションの再生がない場合、待機モーションの中からランダムで再生する
         if (!isSleepTransitionActive()
-                && !isHeadInteractionActive()
+                && !isCharacterInteractionActive()
                 && motionManager.isFinished()) {
             final String idleGroup = LAppDefine.MotionGroup.IDLE.getId();
 
@@ -151,7 +160,7 @@ public class LAppMinimumModel extends CubismUserModel {
                     && modelSetting.getMotionCount(idleGroup) > 0) {
                 startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
             }
-        } else if (!isSleepTransitionActive() && !isHeadInteractionActive()) {
+        } else if (!isSleepTransitionActive() && !isCharacterInteractionActive()) {
             // モーションを更新
             motionUpdated = motionManager.updateMotion(model, deltaTimeSeconds);
         }
@@ -164,7 +173,7 @@ public class LAppMinimumModel extends CubismUserModel {
                 deltaTimeSeconds
         );
 
-        if (!isSleepTransitionActive() && !isHeadInteractionActive()) {
+        if (!isSleepTransitionActive() && !isCharacterInteractionActive()) {
             boredMotionController.update(
                     model,
                     deltaTimeSeconds
@@ -173,6 +182,8 @@ public class LAppMinimumModel extends CubismUserModel {
 
         headPatMotionController.update(model, deltaTimeSeconds);
         headDoubleTapMotionController.update(model, deltaTimeSeconds);
+        bodyStrokeMotionController.update(model, deltaTimeSeconds);
+        bodyDoubleTapMotionController.update(model, deltaTimeSeconds);
 
         if (idleEffectsEnabled) {
             naturalBlinkController.update(
@@ -225,6 +236,8 @@ public class LAppMinimumModel extends CubismUserModel {
         motionManager.stopAllMotions();
         boredMotionController.stop(model);
         headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
         return headPatMotionController.start(model);
     }
 
@@ -252,6 +265,8 @@ public class LAppMinimumModel extends CubismUserModel {
         motionManager.stopAllMotions();
         boredMotionController.stop(model);
         headPatMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
         return headDoubleTapMotionController.start(model);
     }
 
@@ -268,6 +283,61 @@ public class LAppMinimumModel extends CubismUserModel {
                 || headDoubleTapMotionController.isActive();
     }
 
+    public boolean startBodyStrokeMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
+        return bodyStrokeMotionController.start(model);
+    }
+
+    public void updateBodyStroke(float strokeX, float strokeY) {
+        bodyStrokeMotionController.setTarget(strokeX, strokeY);
+    }
+
+    public void endBodyStrokeMotion() {
+        bodyStrokeMotionController.startRelease();
+    }
+
+    public void stopBodyStrokeMotion() {
+        bodyStrokeMotionController.stop(model);
+    }
+
+    public boolean isBodyStrokeFinished() {
+        return bodyStrokeMotionController.isFinished();
+    }
+
+    public boolean isBodyStrokeReleasing() {
+        return bodyStrokeMotionController.isReleasing();
+    }
+
+    public boolean startBodyDoubleTapMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        return bodyDoubleTapMotionController.start(model);
+    }
+
+    public void stopBodyDoubleTapMotion() {
+        bodyDoubleTapMotionController.stop(model);
+    }
+
+    public boolean isBodyDoubleTapFinished() {
+        return bodyDoubleTapMotionController.isFinished();
+    }
+
+    public boolean isBodyInteractionActive() {
+        return bodyStrokeMotionController.isActive()
+                || bodyDoubleTapMotionController.isActive();
+    }
+
+    public boolean isCharacterInteractionActive() {
+        return isHeadInteractionActive() || isBodyInteractionActive();
+    }
+
     /**
      * Idle → Sleep 진입 전환 (기본 1.8초).
      * {@link #SLEEP_ENTRY_DURATION_SECONDS} 값을 수정해 조절한다.
@@ -277,6 +347,8 @@ public class LAppMinimumModel extends CubismUserModel {
         boredMotionController.stop(model);
         headPatMotionController.stop(model);
         headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
         sleepMotionActive = false;
 
         capturePreSleepPose();
@@ -926,6 +998,8 @@ public class LAppMinimumModel extends CubismUserModel {
     private final BoredMotionController boredMotionController;
     private final HeadPatMotionController headPatMotionController;
     private final HeadDoubleTapMotionController headDoubleTapMotionController;
+    private final BodyStrokeMotionController bodyStrokeMotionController;
+    private final BodyDoubleTapMotionController bodyDoubleTapMotionController;
     private final NaturalBlinkController naturalBlinkController;
     private final ParameterTransitionController sleepEntryTransition;
     private final ParameterTransitionController wakeTransition;
