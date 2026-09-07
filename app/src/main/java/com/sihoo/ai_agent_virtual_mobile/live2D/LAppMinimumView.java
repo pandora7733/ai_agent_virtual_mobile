@@ -23,22 +23,22 @@ public class LAppMinimumView implements AutoCloseable {
      */
 
     private static final float HEAD_CENTER_X = 0.00f;
-    private static final float HEAD_CENTER_Y = 0.70f;
+    private static final float HEAD_CENTER_Y = 0.75f;
     private static final float LOOK_RANGE_X = 0.67f;
     private static final float LOOK_RANGE_Y = 1.45f;
-    private static final float HEAD_HIT_RADIUS_X = 0.38f;
-    private static final float HEAD_HIT_RADIUS_Y = 0.45f;
+    private static final float HEAD_HIT_RADIUS_X = 0.15f;
+    private static final float HEAD_HIT_RADIUS_Y = 0.15f;
     private static final float BODY_CENTER_X = 0.00f;
-    private static final float BODY_CENTER_Y = -0.05f;
-    private static final float BODY_HIT_RADIUS_X = 0.42f;
-    private static final float BODY_HIT_RADIUS_Y = 0.55f;
-    private static final float BODY_CHEST_BELLY_SPLIT_Y = 0.12f;
+    private static final float BODY_CENTER_Y = 0.32f;
+    private static final float BODY_HIT_RADIUS_X = 0.20f;
+    private static final float BODY_HIT_RADIUS_Y = 0.35f;
+    private static final float BODY_CHEST_BELLY_SPLIT_Y = 0.35f;
     private static final float DRAG_START_DISTANCE_PX = 24.0f;
     private static final long DOUBLE_TAP_MAX_INTERVAL_MS = 320L;
     private static final float DOUBLE_TAP_MAX_DISTANCE_PX = 40.0f;
     private static final long MOVE_LOG_INTERVAL_MS = 250L;
     private static final String TOUCH_LOG_TAG = "PetTouch";
-    private static final boolean DEBUG_DRAW_HIT_AREAS = true;
+    private static final boolean DEBUG_DRAW_HIT_AREAS = false;
 
     public enum HitRegion {
         NONE,
