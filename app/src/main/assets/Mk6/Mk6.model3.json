@@ -8,10 +8,29 @@
 		],
 		"Physics": "Mk6.physics3.json",
 		"DisplayInfo": "Mk6.cdi3.json",
+		"Expressions": [
+			{
+				"Name": "Happy",
+				"File": "Expressions/Happy.exp3.json"
+			},
+			{
+				"Name": "Outfit",
+				"File": "Expressions/Outfit.exp3.json"
+			},
+			{
+				"Name": "JaketOFF",
+				"File": "Expressions/JaketOFF.exp3.json"
+			}
+		],
 		"Motions": {
 			"Idle": [
 				{
 					"File": "Motions/idle.motion3.json"
+				}
+			],
+			"Sleep": [
+				{
+					"File": "Motions/Sleep.motion3.json"
 				}
 			]
 		}

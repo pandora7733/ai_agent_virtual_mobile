@@ -13,6 +13,7 @@ import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
 import com.live2d.sdk.cubism.framework.ICubismModelSetting;
 import com.live2d.sdk.cubism.framework.effect.CubismLook;
+import com.live2d.sdk.cubism.framework.effect.CubismBreath;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.id.CubismIdManager;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
@@ -25,6 +26,7 @@ import com.live2d.sdk.cubism.framework.motion.CubismLookUpdater;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismPhysicsUpdater;
 import com.live2d.sdk.cubism.framework.motion.CubismPoseUpdater;
+import com.live2d.sdk.cubism.framework.motion.CubismBreathUpdater;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRenderTargetAndroid;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
@@ -45,6 +47,49 @@ public class LAppMinimumModel extends CubismUserModel {
         idParamBodyAngleX = idManager.getId(CubismDefaultParameterId.ParameterId.BODY_ANGLE_X.getId());
         idParamEyeBallX = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_BALL_X.getId());
         idParamEyeBallY = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_BALL_Y.getId());
+        idParamEyeLOpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_L_OPEN.getId());
+        idParamEyeROpen = idManager.getId(CubismDefaultParameterId.ParameterId.EYE_R_OPEN.getId());
+        naturalBlinkController = new NaturalBlinkController(
+                idParamEyeLOpen,
+                idParamEyeROpen
+        );
+        idParamBreath = idManager.getId(CubismDefaultParameterId.ParameterId.BREATH.getId());
+
+        firstVisitMotionController = new FirstVisitMotionController(
+                idParamAngleX,
+                idParamAngleY,
+                idParamAngleZ,
+                idParamBodyAngleX,
+                idParamEyeBallX,
+                idParamEyeBallY,
+                idParamEyeLOpen,
+                idParamEyeROpen
+        );
+        boredMotionController = new BoredMotionController(
+                idParamAngleX,
+                idParamAngleY,
+                idParamAngleZ,
+                idParamBodyAngleX
+        );
+        headPatMotionController = new HeadPatMotionController(
+                idParamAngleX,
+                idParamAngleY,
+                idParamAngleZ
+        );
+        headDoubleTapMotionController = new HeadDoubleTapMotionController(
+                idParamAngleY
+        );
+        bodyStrokeMotionController = new BodyStrokeMotionController(
+                idParamAngleX,
+                idParamAngleZ,
+                idParamBodyAngleX
+        );
+        bodyDoubleTapMotionController = new BodyDoubleTapMotionController(
+                idParamAngleY,
+                idParamBodyAngleX
+        );
+        sleepEntryTransition = new ParameterTransitionController();
+        wakeTransition = new ParameterTransitionController();
 
         modelHomeDirectory = modelDirName;
     }
@@ -104,16 +149,47 @@ public class LAppMinimumModel extends CubismUserModel {
         model.loadParameters();
 
         // モーションの再生がない場合、待機モーションの中からランダムで再生する
-        if (motionManager.isFinished()) {
+        if (!isSleepTransitionActive()
+                && !isCharacterInteractionActive()
+                && motionManager.isFinished()) {
             final String idleGroup = LAppDefine.MotionGroup.IDLE.getId();
 
             // model3.json に Idle モーションが登録されていない場合は再生を試みない。
-            if (modelSetting.getMotionCount(idleGroup) > 0) {
+            if (!boredMotionController.isActive()
+                    && !sleepMotionActive
+                    && modelSetting.getMotionCount(idleGroup) > 0) {
                 startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
             }
-        } else {
+        } else if (!isSleepTransitionActive() && !isCharacterInteractionActive()) {
             // モーションを更新
             motionUpdated = motionManager.updateMotion(model, deltaTimeSeconds);
+        }
+
+        sleepEntryTransition.update(model, deltaTimeSeconds);
+        wakeTransition.update(model, deltaTimeSeconds);
+
+        firstVisitMotionController.update(
+                model,
+                deltaTimeSeconds
+        );
+
+        if (!isSleepTransitionActive() && !isCharacterInteractionActive()) {
+            boredMotionController.update(
+                    model,
+                    deltaTimeSeconds
+            );
+        }
+
+        headPatMotionController.update(model, deltaTimeSeconds);
+        headDoubleTapMotionController.update(model, deltaTimeSeconds);
+        bodyStrokeMotionController.update(model, deltaTimeSeconds);
+        bodyDoubleTapMotionController.update(model, deltaTimeSeconds);
+
+        if (idleEffectsEnabled) {
+            naturalBlinkController.update(
+                    model,
+                    deltaTimeSeconds
+            );
         }
 
         // モデルの状態を保存
@@ -125,6 +201,346 @@ public class LAppMinimumModel extends CubismUserModel {
         model.update();
 
         isUpdated(true);
+    }
+
+    public void setIdleEffectsEnabled(boolean enabled) {
+        idleEffectsEnabled = enabled;
+
+        if (enabled) {
+            naturalBlinkController.reset();
+        }
+    }
+
+    public void startFirstVisitMotion() {
+        firstVisitMotionController.start(model);
+    }
+
+    public boolean isFirstVisitMotionFinished() {
+        return firstVisitMotionController.isFinished();
+    }
+
+    public boolean startBoredMotion() {
+        motionManager.stopAllMotions();
+        return boredMotionController.start(model);
+    }
+
+    public void stopBoredMotion() {
+        boredMotionController.stop(model);
+    }
+
+    public boolean isBoredMotionFinished() {
+        return boredMotionController.isFinished();
+    }
+
+    public boolean startHeadPatMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
+        return headPatMotionController.start(model);
+    }
+
+    public void updateHeadPat(float patX, float patY) {
+        headPatMotionController.setTarget(patX, patY);
+    }
+
+    public void endHeadPatMotion() {
+        headPatMotionController.startRelease();
+    }
+
+    public void stopHeadPatMotion() {
+        headPatMotionController.stop(model);
+    }
+
+    public boolean isHeadPatFinished() {
+        return headPatMotionController.isFinished();
+    }
+
+    public boolean isHeadPatReleasing() {
+        return headPatMotionController.isReleasing();
+    }
+
+    public boolean startHeadDoubleTapMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
+        return headDoubleTapMotionController.start(model);
+    }
+
+    public void stopHeadDoubleTapMotion() {
+        headDoubleTapMotionController.stop(model);
+    }
+
+    public boolean isHeadDoubleTapFinished() {
+        return headDoubleTapMotionController.isFinished();
+    }
+
+    public boolean isHeadInteractionActive() {
+        return headPatMotionController.isActive()
+                || headDoubleTapMotionController.isActive();
+    }
+
+    public boolean startBodyStrokeMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
+        return bodyStrokeMotionController.start(model);
+    }
+
+    public void updateBodyStroke(float strokeX, float strokeY) {
+        bodyStrokeMotionController.setTarget(strokeX, strokeY);
+    }
+
+    public void endBodyStrokeMotion() {
+        bodyStrokeMotionController.startRelease();
+    }
+
+    public void stopBodyStrokeMotion() {
+        bodyStrokeMotionController.stop(model);
+    }
+
+    public boolean isBodyStrokeFinished() {
+        return bodyStrokeMotionController.isFinished();
+    }
+
+    public boolean isBodyStrokeReleasing() {
+        return bodyStrokeMotionController.isReleasing();
+    }
+
+    public boolean startBodyDoubleTapMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        return bodyDoubleTapMotionController.start(model);
+    }
+
+    public void stopBodyDoubleTapMotion() {
+        bodyDoubleTapMotionController.stop(model);
+    }
+
+    public boolean isBodyDoubleTapFinished() {
+        return bodyDoubleTapMotionController.isFinished();
+    }
+
+    public boolean isBodyInteractionActive() {
+        return bodyStrokeMotionController.isActive()
+                || bodyDoubleTapMotionController.isActive();
+    }
+
+    public boolean isCharacterInteractionActive() {
+        return isHeadInteractionActive() || isBodyInteractionActive();
+    }
+
+    /**
+     * Idle → Sleep 진입 전환 (기본 1.8초).
+     * {@link #SLEEP_ENTRY_DURATION_SECONDS} 값을 수정해 조절한다.
+     */
+    public boolean startSleepEntryMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
+        sleepMotionActive = false;
+
+        capturePreSleepPose();
+
+        float[] sleepTargetPose = buildSleepTargetPose();
+        return sleepEntryTransition.start(
+                model,
+                sleepTargetPose,
+                SLEEP_ENTRY_DURATION_SECONDS
+        );
+    }
+
+    public boolean isSleepEntryFinished() {
+        return sleepEntryTransition.isFinished();
+    }
+
+    public boolean startSleepLoopMotion() {
+        if (sleepMotionActive) {
+            return true;
+        }
+
+        final String sleepGroup = LAppDefine.MotionGroup.SLEEP.getId();
+        if (modelSetting.getMotionCount(sleepGroup) <= 0) {
+            return false;
+        }
+
+        motionManager.stopAllMotions();
+
+        final String motionName = sleepGroup + "_0";
+        CubismMotion sleepMotion = (CubismMotion) motions.get(motionName);
+        if (sleepMotion != null) {
+            // 루프 시작 시점을 눈이 감긴 이후(0.7초)로 맞춰 SLEEP_ENTRY 종료 자세와 일치시킨다.
+            sleepMotion.setOffsetTime(SLEEP_LOOP_START_OFFSET_SECONDS);
+            sleepMotion.setFadeInTime(0.0f);
+        }
+
+        applySleepSteadyPoseToModel();
+        model.saveParameters();
+
+        int motionId = startMotion(
+                sleepGroup,
+                0,
+                LAppDefine.Priority.FORCE.getPriority()
+        );
+
+        sleepMotionActive = motionId != -1;
+        return sleepMotionActive;
+    }
+
+    /**
+     * Sleep → Idle 기상 전환 (기본 1.3초).
+     * {@link #WAKE_DURATION_SECONDS} 값을 수정해 조절한다.
+     */
+    public boolean startWakeMotion() {
+        if (preSleepParameterValues == null) {
+            return false;
+        }
+
+        motionManager.stopAllMotions();
+        sleepMotionActive = false;
+
+        return wakeTransition.start(
+                model,
+                preSleepParameterValues,
+                WAKE_DURATION_SECONDS
+        );
+    }
+
+    public boolean isWakeMotionFinished() {
+        return wakeTransition.isFinished();
+    }
+
+    public void finishWakeMotion() {
+        wakeTransition.stop(model);
+        model.saveParameters();
+        preSleepParameterValues = null;
+    }
+
+    public boolean isSleepTransitionActive() {
+        return sleepEntryTransition.isActive()
+                || wakeTransition.isActive();
+    }
+
+    /** Idle → Sleep 진입 전환 시간[초] */
+    public static final float SLEEP_ENTRY_DURATION_SECONDS = 1.8f;
+
+    /** Sleep → Idle 기상 전환 시간[초] */
+    public static final float WAKE_DURATION_SECONDS = 1.3f;
+
+    /**
+     * Sleep 루프 모션 재생 시작 위치[초].
+     * Sleep.motion3.json에서 눈이 감기고 표정이 안정된 이후 시점.
+     */
+    private static final float SLEEP_LOOP_START_OFFSET_SECONDS = 0.7f;
+
+    public boolean startSleepMotion() {
+        return startSleepLoopMotion();
+    }
+
+    public void stopSleepMotion() {
+        motionManager.stopAllMotions();
+        sleepMotionActive = false;
+        sleepEntryTransition.stop(model);
+        wakeTransition.stop(model);
+    }
+
+    private float[] buildSleepTargetPose() {
+        int parameterCount = model.getParameterCount();
+        float[] targetPose = new float[parameterCount];
+
+        for (int i = 0; i < parameterCount; i++) {
+            targetPose[i] = model.getParameterValue(i);
+        }
+
+        applySleepSteadyPose(targetPose);
+        return targetPose;
+    }
+
+    private void applySleepSteadyPoseToModel() {
+        int parameterCount = model.getParameterCount();
+        float[] targetPose = new float[parameterCount];
+
+        for (int i = 0; i < parameterCount; i++) {
+            targetPose[i] = model.getParameterValue(i);
+        }
+
+        applySleepSteadyPose(targetPose);
+
+        for (int i = 0; i < parameterCount; i++) {
+            model.setParameterValue(i, targetPose[i]);
+        }
+    }
+
+    /**
+     * Sleep.motion3.json 루프 안정 구간(0.7초 이후)의 파라미터 값.
+     * SLEEP_ENTRY 목표 자세와 Sleep 루프 시작 프레임을 동일하게 맞춘다.
+     */
+    private void applySleepSteadyPose(float[] values) {
+        CubismIdManager idManager = CubismFramework.getIdManager();
+
+        setParameterInArray(values, idParamAngleX, -2.0f);
+        setParameterInArray(values, idParamAngleY, 6.0f);
+        setParameterInArray(values, idParamAngleZ, 19.0f);
+        setParameterInArray(values, idParamBodyAngleX, -1.0f);
+        setParameterInArray(values, idParamEyeLOpen, 0.0f);
+        setParameterInArray(values, idParamEyeROpen, 0.0f);
+
+        setParameterInArray(values, idManager.getId("BodyAngleY"), 1.0f);
+        setParameterInArray(values, idManager.getId("ParamBodyAngleZ"), 10.0f);
+        setParameterInArray(values, idManager.getId("ParamJawOpen"), 1.0f);
+        setParameterInArray(values, idManager.getId("ParamMode2Form"), 1.0f);
+        setParameterInArray(values, idManager.getId("ExpHairSticker"), 1.0f);
+        setParameterInArray(values, idManager.getId("ExpMask"), 1.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthMode"), 1.0f);
+        setParameterInArray(values, idManager.getId("ExpSleeping"), 1.0f);
+        setParameterInArray(values, idManager.getId("ExpMouthSolidcolor"), 1.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthOpenY"), 0.5f);
+
+        setParameterInArray(values, idManager.getId("ParamBrowLDown"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamBrowRDown"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamBrowLOutterUp"), 0.0f);
+        setParameterInArray(values, idManager.getId("BrowROutterUp"), 0.0f);
+        setParameterInArray(values, idManager.getId("BrowRInnerUp"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamBrowForm"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthForm"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthFunnel"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthPressLipOpen"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthPunkerWiden"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthShrug"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamMouthX"), 0.0f);
+        setParameterInArray(values, idManager.getId("ParamCheekPuff"), 0.0f);
+    }
+
+    private void setParameterInArray(
+            float[] values,
+            CubismId parameterId,
+            float value
+    ) {
+        int index = model.getParameterIndex(parameterId);
+
+        if (index >= 0 && index < values.length) {
+            values[index] = value;
+        }
+    }
+
+    private void capturePreSleepPose() {
+        int parameterCount = model.getParameterCount();
+        preSleepParameterValues = new float[parameterCount];
+
+        for (int i = 0; i < parameterCount; i++) {
+            preSleepParameterValues[i] = model.getParameterValue(i);
+        }
     }
 
     /**
@@ -181,6 +597,40 @@ public class LAppMinimumModel extends CubismUserModel {
         }
 
         return motionManager.startMotionPriority(motion, priority);
+    }
+
+    public boolean setExpression(String expressionName) {
+        ACubismMotion expression = expressions.get(expressionName);
+
+        if (!(expression instanceof CubismExpressionMotion)) {
+            if (LAppDefine.DEBUG_LOG_ENABLE) {
+                CubismFramework.coreLogFunction(
+                        "[APP] expression not found: " + expressionName
+                );
+            }
+            return false;
+        }
+
+        int motionId = expressionManager.startMotionPriority(
+                expression,
+                LAppDefine.Priority.NORMAL.getPriority()
+        );
+
+        if (LAppDefine.DEBUG_LOG_ENABLE) {
+            CubismFramework.coreLogFunction(
+                    "[APP] start expression: "
+                            + expressionName
+                            + ", id="
+                            + motionId
+            );
+        }
+
+        return motionId != -1;
+    }
+
+    public boolean clearExpression() {
+        expressionManager.stopAllMotions();
+        return true;
     }
 
     public void draw(CubismMatrix44 matrix) {
@@ -335,6 +785,65 @@ public class LAppMinimumModel extends CubismUserModel {
             updateScheduler.addUpdatableList(new CubismLookUpdater(look, dragManager));
         }
 
+        breath = CubismBreath.create();
+
+        List<CubismBreath.BreathParameterData> breathParameters =
+                new ArrayList<>();
+
+//      peak: 움직임 크기
+//      weight: 적용 강도
+//      cycle: 호흡 속도
+//      offset: 기본 위치 보정
+
+//      고개 상하
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamAngleY,
+                        0.0f,
+                        2.5f,
+                        4.5f,
+                        1.50f
+                )
+        );
+
+//      고개 기울기
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamAngleZ,
+                        0.0f,
+                        1.2f,
+                        4.8f,
+                        0.85f
+                )
+        );
+//      몸 움직임
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamBodyAngleX,
+                        0.0f,
+                        1.2f,
+                        4.2f,
+                        0.7f
+                )
+        );
+
+//      모델 내부 호흡 변형
+        breathParameters.add(
+                new CubismBreath.BreathParameterData(
+                        idParamBreath,
+                        0.0f,
+                        0.7f,
+                        3.7f,
+                        1.1f
+                )
+        );
+
+        breath.setParameters(breathParameters);
+
+        updateScheduler.addUpdatableList(
+                new CubismBreathUpdater(breath)
+        );
+
         updateScheduler.sortUpdatableList();
 
 
@@ -482,6 +991,21 @@ public class LAppMinimumModel extends CubismUserModel {
      * パラメーターID: ParamEyeBallY
      */
     private final CubismId idParamEyeBallY;
+    private final CubismId idParamEyeLOpen;
+    private final CubismId idParamEyeROpen;
+    private final CubismId idParamBreath;
+    private final FirstVisitMotionController firstVisitMotionController;
+    private final BoredMotionController boredMotionController;
+    private final HeadPatMotionController headPatMotionController;
+    private final HeadDoubleTapMotionController headDoubleTapMotionController;
+    private final BodyStrokeMotionController bodyStrokeMotionController;
+    private final BodyDoubleTapMotionController bodyDoubleTapMotionController;
+    private final NaturalBlinkController naturalBlinkController;
+    private final ParameterTransitionController sleepEntryTransition;
+    private final ParameterTransitionController wakeTransition;
+    private float[] preSleepParameterValues;
+    private boolean sleepMotionActive = false;
+    private boolean idleEffectsEnabled = false;
     /**
      * 現フレームでメインモーションがパラメーターを更新したか
      */

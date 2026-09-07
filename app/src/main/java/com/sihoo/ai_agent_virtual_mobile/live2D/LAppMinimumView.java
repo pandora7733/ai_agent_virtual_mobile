@@ -12,11 +12,41 @@ import com.sihoo.ai_agent_virtual_mobile.live2D.demo.TouchManager;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.math.CubismViewMatrix;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRenderTargetAndroid;
+import android.os.SystemClock;
+import android.util.Log;
+
+import java.util.Locale;
 
 public class LAppMinimumView implements AutoCloseable {
     /**
      * LAppMinimumModelのレンダリング先
      */
+
+    private static final float HEAD_CENTER_X = 0.00f;
+    private static final float HEAD_CENTER_Y = 0.75f;
+    private static final float LOOK_RANGE_X = 0.67f;
+    private static final float LOOK_RANGE_Y = 1.45f;
+    private static final float HEAD_HIT_RADIUS_X = 0.15f;
+    private static final float HEAD_HIT_RADIUS_Y = 0.15f;
+    private static final float BODY_CENTER_X = 0.00f;
+    private static final float BODY_CENTER_Y = 0.32f;
+    private static final float BODY_HIT_RADIUS_X = 0.20f;
+    private static final float BODY_HIT_RADIUS_Y = 0.35f;
+    private static final float BODY_CHEST_BELLY_SPLIT_Y = 0.35f;
+    private static final float DRAG_START_DISTANCE_PX = 24.0f;
+    private static final long DOUBLE_TAP_MAX_INTERVAL_MS = 320L;
+    private static final float DOUBLE_TAP_MAX_DISTANCE_PX = 40.0f;
+    private static final long MOVE_LOG_INTERVAL_MS = 250L;
+    private static final String TOUCH_LOG_TAG = "PetTouch";
+    private static final boolean DEBUG_DRAW_HIT_AREAS = false;
+
+    public enum HitRegion {
+        NONE,
+        HEAD,
+        CHEST,
+        BELLY
+    } 
+
     public enum RenderingTarget {
         NONE,   // デフォルトのフレームバッファにレンダリング
         MODEL_FRAME_BUFFER,     // LAppMinimumModelが各自持つフレームバッファにレンダリング
@@ -39,6 +69,11 @@ public class LAppMinimumView implements AutoCloseable {
         if (spriteShader != null) {
             spriteShader.close();
             spriteShader = null;
+        }
+
+        if (hitOverlay != null) {
+            hitOverlay.close();
+            hitOverlay = null;
         }
     }
 
@@ -82,6 +117,14 @@ public class LAppMinimumView implements AutoCloseable {
         );
 
         spriteShader = new LAppMinimumSpriteShader();
+
+        if (hitOverlay != null) {
+            hitOverlay.close();
+            hitOverlay = null;
+        }
+        if (DEBUG_DRAW_HIT_AREAS) {
+            hitOverlay = new HitRegionDebugOverlay();
+        }
     }
 
     // 画像を初期化する
@@ -128,6 +171,8 @@ public class LAppMinimumView implements AutoCloseable {
                 renderingSprite.renderImmediate(model.getRenderingBuffer().getColorBuffer()[0], uvVertex);
             }
         }
+
+        drawHitRegionOverlay();
     }
 
     /**
@@ -216,6 +261,161 @@ public class LAppMinimumView implements AutoCloseable {
      */
     public void onTouchesBegan(float pointX, float pointY) {
         touchManager.touchesBegan(pointX, pointY);
+
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        ignoreHeadGestureThisTouch = manager.onUserActivity();
+
+        float viewX = transformViewX(pointX);
+        float viewY = transformViewY(pointY);
+        float localX = toModelLocalX(viewX);
+        float localY = toModelLocalY(viewY);
+        HitRegion hitRegion = resolveHitRegion(localX, localY);
+        boolean canStartGesture = !ignoreHeadGestureThisTouch
+                && manager.canStartHeadInteraction();
+
+        touchStartX = pointX;
+        touchStartY = pointY;
+        touchStartedRegion = canStartGesture ? hitRegion : HitRegion.NONE;
+        isHeadPatting = false;
+        isBodyStroking = false;
+        lookStartedThisTouch = false;
+        pinchStartedThisTouch = false;
+        pinchWaitLoggedThisTouch = false;
+        lastMoveLogMs = 0L;
+
+        logTouch(
+                "TOUCH_DOWN"
+                        + " hit=" + hitRegion
+                        + " gesture=" + touchStartedRegion
+                        + " state=" + manager.getCurrentState()
+                        + " blocked=" + ignoreHeadGestureThisTouch
+                        + " canStart=" + manager.canStartHeadInteraction()
+                        + " screen=(" + fmt(pointX) + ", " + fmt(pointY) + ")"
+                        + modelSpaceLog(viewX, viewY, localX, localY)
+                        + " splitY=" + fmt(BODY_CHEST_BELLY_SPLIT_Y)
+                        + " yVsSplit=" + (localY >= BODY_CHEST_BELLY_SPLIT_Y
+                        ? "above" : "below")
+        );
+
+        lastTouchViewX = viewX;
+        lastTouchViewY = viewY;
+        lastTouchHitRegion = hitRegion;
+        hasLastTouch = true;
+    }
+
+    public void onTouchesMoved(float pointX, float pointY) {
+        touchManager.touchesMoved(pointX, pointY);
+
+        float viewX = transformViewX(pointX);
+        float viewY = transformViewY(pointY);
+        float localX = toModelLocalX(viewX);
+        float localY = toModelLocalY(viewY);
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        HitRegion liveRegion = resolveHitRegion(localX, localY);
+        lastTouchViewX = viewX;
+        lastTouchViewY = viewY;
+        lastTouchHitRegion = liveRegion;
+        hasLastTouch = true;
+
+        if (touchStartedRegion == HitRegion.HEAD) {
+            float distance = distance(pointX, pointY, touchStartX, touchStartY);
+
+            if (!isHeadPatting && distance >= DRAG_START_DISTANCE_PX) {
+                isHeadPatting = true;
+                logTouch(
+                        "HEAD_DRAG_START"
+                                + " distPx=" + fmt(distance)
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+            }
+
+            if (isHeadPatting) {
+                float patX = toPatCoordinateX(localX);
+                float patY = toPatCoordinateY(localY);
+                logMoveThrottled(
+                        "HEAD_PAT_MOVE"
+                                + " pat=(" + fmt(patX) + ", " + fmt(patY) + ")"
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+                manager.onHeadPat(patX, patY);
+                return;
+            }
+
+            logMoveThrottled(
+                    "HEAD_HOLD"
+                            + " distPx=" + fmt(distance)
+                            + " liveHit=" + liveRegion
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            return;
+        }
+
+        if (isBodyRegion(touchStartedRegion)) {
+            float distance = distance(pointX, pointY, touchStartX, touchStartY);
+
+            if (!isBodyStroking && distance >= DRAG_START_DISTANCE_PX) {
+                isBodyStroking = true;
+                logTouch(
+                        "BODY_DRAG_START"
+                                + " region=" + touchStartedRegion
+                                + " distPx=" + fmt(distance)
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+            }
+
+            if (isBodyStroking) {
+                float strokeX = toBodyStrokeX(localX);
+                float strokeY = toBodyStrokeY(localY);
+                logMoveThrottled(
+                        "BODY_STROKE_MOVE"
+                                + " region=" + touchStartedRegion
+                                + " stroke=(" + fmt(strokeX) + ", " + fmt(strokeY) + ")"
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+                manager.onBodyStroke(strokeX, strokeY);
+                return;
+            }
+
+            logMoveThrottled(
+                    "BODY_HOLD"
+                            + " region=" + touchStartedRegion
+                            + " distPx=" + fmt(distance)
+                            + " liveHit=" + liveRegion
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            return;
+        }
+
+        float relativeX = localX - HEAD_CENTER_X;
+        float relativeY = localY - HEAD_CENTER_Y;
+
+        float lookX = clamp(relativeX / LOOK_RANGE_X, -1.0f, 1.0f);
+        float lookY = clamp(relativeY / LOOK_RANGE_Y, -1.0f, 1.0f);
+
+        if (!lookStartedThisTouch) {
+            lookStartedThisTouch = true;
+            logTouch(
+                    "LOOK_START"
+                            + " liveHit=" + liveRegion
+                            + " look=(" + fmt(lookX) + ", " + fmt(lookY) + ")"
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+        } else {
+            logMoveThrottled(
+                    "LOOK_MOVE"
+                            + " liveHit=" + liveRegion
+                            + " look=(" + fmt(lookX) + ", " + fmt(lookY) + ")"
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+        }
+
+        manager.onDrag(lookX, lookY);
     }
 
     /**
@@ -224,14 +424,106 @@ public class LAppMinimumView implements AutoCloseable {
      * @param pointX スクリーンX座標
      * @param pointY スクリーンY座標
      */
-    public void onTouchesMoved(float pointX, float pointY) {
-        float viewX = transformViewX(touchManager.getLastX());
-        float viewY = transformViewY(touchManager.getLastY());
 
-        touchManager.touchesMoved(pointX, pointY);
+    public void onTouchesMoved(
+            float x1,
+            float y1,
+            float x2,
+            float y2
+    ) {
+        float previousDeviceCenterX = touchManager.getLastX();
+        float previousDeviceCenterY = touchManager.getLastY();
 
-        LAppMinimumLive2DManager.getInstance().onDrag(viewX, viewY);
+        float currentDeviceCenterX = (x1 + x2) * 0.5f;
+        float currentDeviceCenterY = (y1 + y2) * 0.5f;
+
+        boolean hasPreviousPinch =
+                touchManager.getLastTouchDistance() > 0.0f;
+
+        if (isHeadPatting) {
+            logTouch("PINCH_CANCEL_HEAD_PAT");
+            LAppMinimumLive2DManager.getInstance().cancelHeadPat();
+            isHeadPatting = false;
+            touchStartedRegion = HitRegion.NONE;
+        }
+
+        if (isBodyStroking) {
+            logTouch("PINCH_CANCEL_BODY_STROKE region=" + touchStartedRegion);
+            LAppMinimumLive2DManager.getInstance().cancelBodyStroke();
+            isBodyStroking = false;
+            touchStartedRegion = HitRegion.NONE;
+        }
+
+        if (touchStartedRegion != HitRegion.NONE) {
+            logTouch("PINCH_CANCEL_GESTURE region=" + touchStartedRegion);
+            touchStartedRegion = HitRegion.NONE;
+        }
+
+        touchManager.touchesMoved(x1, y1, x2, y2);
+
+        if (!hasPreviousPinch) {
+            if (!pinchWaitLoggedThisTouch) {
+                pinchWaitLoggedThisTouch = true;
+                logTouch(
+                        "PINCH_WAIT_SECOND_MOVE"
+                                + " p1=(" + fmt(x1) + ", " + fmt(y1) + ")"
+                                + " p2=(" + fmt(x2) + ", " + fmt(y2) + ")"
+                );
+            }
+            return;
+        }
+
+        float previousCenterX =
+                transformViewX(previousDeviceCenterX);
+
+        float previousCenterY =
+                transformViewY(previousDeviceCenterY);
+
+        float currentCenterX =
+                transformViewX(currentDeviceCenterX);
+
+        float currentCenterY =
+                transformViewY(currentDeviceCenterY);
+
+        if (!pinchStartedThisTouch) {
+            pinchStartedThisTouch = true;
+            logTouch(
+                    "PINCH_START"
+                            + " scale=" + fmt(touchManager.getScale())
+                            + " previousCenter=("
+                            + fmt(previousCenterX)
+                            + ", "
+                            + fmt(previousCenterY)
+                            + ")"
+                            + " currentCenter=("
+                            + fmt(currentCenterX)
+                            + ", "
+                            + fmt(currentCenterY)
+                            + ")"
+            );
+        } else {
+            logMoveThrottled(
+                    "PINCH_MOVE"
+                            + " scale=" + fmt(touchManager.getScale())
+                            + " currentCenter=("
+                            + fmt(currentCenterX)
+                            + ", "
+                            + fmt(currentCenterY)
+                            + ")"
+            );
+        }
+
+        LAppMinimumLive2DManager.getInstance().onPinch(
+                touchManager.getScale(),
+                previousCenterX,
+                previousCenterY,
+                currentCenterX,
+                currentCenterY
+        );
     }
+
+
+
 
     /**
      * タッチが終了したら呼ばれる
@@ -240,23 +532,331 @@ public class LAppMinimumView implements AutoCloseable {
      * @param pointY スクリーンY座標
      */
     public void onTouchesEnded(float pointX, float pointY) {
-        // タッチ終了
-        LAppMinimumLive2DManager live2DManager = LAppMinimumLive2DManager.getInstance();
-        live2DManager.onDrag(0.0f, 0.0f);
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        manager.onDrag(0.0f, 0.0f);
 
-        // シングルタップ
-        // 論理座標変換した座標を取得
-        float x = deviceToScreen.transformX(touchManager.getLastX());
-        // 論理座標変換した座標を取得
-        float y = deviceToScreen.transformY(touchManager.getLastY());
+        float viewX = transformViewX(pointX);
+        float viewY = transformViewY(pointY);
+        float localX = toModelLocalX(viewX);
+        float localY = toModelLocalY(viewY);
+        HitRegion liveRegion = resolveHitRegion(localX, localY);
+        float moveDistance = distance(pointX, pointY, touchStartX, touchStartY);
+
+        lastTouchViewX = viewX;
+        lastTouchViewY = viewY;
+        lastTouchHitRegion = liveRegion;
+        hasLastTouch = true;
+
+        if (isHeadPatting) {
+            logTouch(
+                    "HEAD_PAT_END"
+                            + " distPx=" + fmt(moveDistance)
+                            + " liveHit=" + liveRegion
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            manager.onHeadPatEnd();
+            isHeadPatting = false;
+            touchStartedRegion = HitRegion.NONE;
+            lastTapRegion = HitRegion.NONE;
+            resetTouchSession();
+            return;
+        }
+
+        if (isBodyStroking) {
+            logTouch(
+                    "BODY_STROKE_END"
+                            + " region=" + touchStartedRegion
+                            + " distPx=" + fmt(moveDistance)
+                            + " liveHit=" + liveRegion
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            manager.onBodyStrokeEnd();
+            isBodyStroking = false;
+            touchStartedRegion = HitRegion.NONE;
+            lastTapRegion = HitRegion.NONE;
+            resetTouchSession();
+            return;
+        }
+
+        boolean shortHeadTap = touchStartedRegion == HitRegion.HEAD
+                && moveDistance < DRAG_START_DISTANCE_PX;
+        boolean shortBodyTap = isBodyRegion(touchStartedRegion)
+                && moveDistance < DRAG_START_DISTANCE_PX;
+
+        long now = SystemClock.uptimeMillis();
+
+        if (shortHeadTap) {
+            boolean isDoubleTap = lastTapRegion == HitRegion.HEAD
+                    && (now - lastTapTimeMs) <= DOUBLE_TAP_MAX_INTERVAL_MS
+                    && distance(pointX, pointY, lastTapX, lastTapY)
+                    <= DOUBLE_TAP_MAX_DISTANCE_PX;
+
+            if (isDoubleTap) {
+                logTouch(
+                        "HEAD_DOUBLE_TAP"
+                                + " intervalMs=" + (now - lastTapTimeMs)
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+                manager.onHeadDoubleTap();
+                lastTapRegion = HitRegion.NONE;
+            } else {
+                logTouch(
+                        "HEAD_TAP"
+                                + " waitingSecondTap=true"
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+                lastTapTimeMs = now;
+                lastTapX = pointX;
+                lastTapY = pointY;
+                lastTapRegion = HitRegion.HEAD;
+            }
+        } else if (shortBodyTap) {
+            boolean isDoubleTap = lastTapRegion == touchStartedRegion
+                    && (now - lastTapTimeMs) <= DOUBLE_TAP_MAX_INTERVAL_MS
+                    && distance(pointX, pointY, lastTapX, lastTapY)
+                    <= DOUBLE_TAP_MAX_DISTANCE_PX;
+
+            if (isDoubleTap) {
+                logTouch(
+                        "BODY_DOUBLE_TAP"
+                                + " region=" + touchStartedRegion
+                                + " intervalMs=" + (now - lastTapTimeMs)
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+                manager.onBodyDoubleTap();
+                lastTapRegion = HitRegion.NONE;
+            } else {
+                logTouch(
+                        "BODY_TAP"
+                                + " region=" + touchStartedRegion
+                                + " lastTap=" + lastTapRegion
+                                + " waitingSecondTap=true"
+                                + " liveHit=" + liveRegion
+                                + modelSpaceLog(viewX, viewY, localX, localY)
+                );
+                lastTapTimeMs = now;
+                lastTapX = pointX;
+                lastTapY = pointY;
+                lastTapRegion = touchStartedRegion;
+            }
+        } else if (pinchStartedThisTouch) {
+            logTouch(
+                    "PINCH_END"
+                            + " liveHit=" + liveRegion
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            lastTapRegion = HitRegion.NONE;
+        } else if (lookStartedThisTouch) {
+            logTouch(
+                    "LOOK_END"
+                            + " liveHit=" + liveRegion
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            lastTapRegion = HitRegion.NONE;
+        } else {
+            logTouch(
+                    "TOUCH_UP"
+                            + " started=" + touchStartedRegion
+                            + " distPx=" + fmt(moveDistance)
+                            + " liveHit=" + liveRegion
+                            + " blocked=" + ignoreHeadGestureThisTouch
+                            + modelSpaceLog(viewX, viewY, localX, localY)
+            );
+            lastTapRegion = HitRegion.NONE;
+        }
+
+        resetTouchSession();
+    }
+
+    private void resetTouchSession() {
+        touchStartedRegion = HitRegion.NONE;
+        ignoreHeadGestureThisTouch = false;
+        lookStartedThisTouch = false;
+        pinchStartedThisTouch = false;
+        pinchWaitLoggedThisTouch = false;
+        lastMoveLogMs = 0L;
+    }
+
+    private HitRegion resolveHitRegion(float localX, float localY) {
+        if (isInsideHead(localX, localY)) {
+            return HitRegion.HEAD;
+        }
+        if (isInsideBody(localX, localY)) {
+            return localY >= BODY_CHEST_BELLY_SPLIT_Y
+                    ? HitRegion.CHEST
+                    : HitRegion.BELLY;
+        }
+        return HitRegion.NONE;
+    }
+
+    private float toModelLocalX(float viewX) {
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        float scale = manager.getUserScale();
+        if (scale < 0.0001f) {
+            scale = 1.0f;
+        }
+        return (viewX - manager.getUserOffsetX()) / scale;
+    }
+
+    private float toModelLocalY(float viewY) {
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        float scale = manager.getUserScale();
+        if (scale < 0.0001f) {
+            scale = 1.0f;
+        }
+        return (viewY - manager.getUserOffsetY()) / scale;
+    }
+
+    private String modelSpaceLog(
+            float viewX,
+            float viewY,
+            float localX,
+            float localY
+    ) {
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        return " view=(" + fmt(viewX) + ", " + fmt(viewY) + ")"
+                + " local=(" + fmt(localX) + ", " + fmt(localY) + ")"
+                + " scale=" + fmt(manager.getUserScale())
+                + " offset=("
+                + fmt(manager.getUserOffsetX())
+                + ", "
+                + fmt(manager.getUserOffsetY())
+                + ")";
+    }
+
+    private static boolean isBodyRegion(HitRegion region) {
+        return region == HitRegion.CHEST || region == HitRegion.BELLY;
+    }
+
+    private void logTouch(String message) {
+        Log.d(TOUCH_LOG_TAG, message);
+    }
+
+    private void logMoveThrottled(String message) {
+        long now = SystemClock.uptimeMillis();
+        if (lastMoveLogMs != 0L && now - lastMoveLogMs < MOVE_LOG_INTERVAL_MS) {
+            return;
+        }
+        lastMoveLogMs = now;
+        logTouch(message);
+    }
+
+    private static String fmt(float value) {
+        return String.format(Locale.US, "%.3f", value);
+    }
+
+    private boolean isInsideBody(float viewX, float viewY) {
+        float dx = (viewX - BODY_CENTER_X) / BODY_HIT_RADIUS_X;
+        float dy = (viewY - BODY_CENTER_Y) / BODY_HIT_RADIUS_Y;
+        return (dx * dx) + (dy * dy) <= 1.0f;
+    }
+
+    private float toBodyStrokeX(float viewX) {
+        return clamp(
+                (viewX - BODY_CENTER_X) / BODY_HIT_RADIUS_X,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private float toBodyStrokeY(float viewY) {
+        return clamp(
+                (viewY - BODY_CENTER_Y) / BODY_HIT_RADIUS_Y,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private boolean isInsideHead(float viewX, float viewY) {
+        float dx = (viewX - HEAD_CENTER_X) / HEAD_HIT_RADIUS_X;
+        float dy = (viewY - HEAD_CENTER_Y) / HEAD_HIT_RADIUS_Y;
+        return (dx * dx) + (dy * dy) <= 1.0f;
+    }
+
+    private float toPatCoordinateX(float viewX) {
+        return clamp(
+                (viewX - HEAD_CENTER_X) / HEAD_HIT_RADIUS_X,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private float toPatCoordinateY(float viewY) {
+        return clamp(
+                (viewY - HEAD_CENTER_Y) / HEAD_HIT_RADIUS_Y,
+                -1.0f,
+                1.0f
+        );
+    }
+
+    private static float distance(
+            float x1,
+            float y1,
+            float x2,
+            float y2
+    ) {
+        float dx = x1 - x2;
+        float dy = y1 - y2;
+        return (float) Math.sqrt(dx * dx + dy * dy);
     }
 
     /**
-     * X座標をView座標に変換する
-     *
-     * @param deviceX デバイスX座標
-     * @return ViewX座標
+     * Convert hit-test view coordinates into OpenGL clip space.
      */
+    public void viewToNdc(float viewX, float viewY, float[] outXy) {
+        int width = LAppMinimumDelegate.getInstance().getWindowWidth();
+        int height = LAppMinimumDelegate.getInstance().getWindowHeight();
+        if (width <= 0 || height <= 0 || outXy == null || outXy.length < 2) {
+            return;
+        }
+
+        float screenX = viewMatrix.transformX(viewX);
+        float screenY = viewMatrix.transformY(viewY);
+        float deviceX = deviceToScreen.invertTransformX(screenX);
+        float deviceY = deviceToScreen.invertTransformY(screenY);
+
+        outXy[0] = (deviceX / (float) width) * 2.0f - 1.0f;
+        outXy[1] = 1.0f - (deviceY / (float) height) * 2.0f;
+    }
+
+    private void drawHitRegionOverlay() {
+        if (!DEBUG_DRAW_HIT_AREAS || hitOverlay == null) {
+            return;
+        }
+
+        LAppMinimumLive2DManager manager =
+                LAppMinimumLive2DManager.getInstance();
+        float scale = manager.getUserScale();
+        if (scale < 0.0001f) {
+            scale = 1.0f;
+        }
+        float offsetX = manager.getUserOffsetX();
+        float offsetY = manager.getUserOffsetY();
+
+        hitOverlay.draw(
+                this,
+                HEAD_CENTER_X * scale + offsetX,
+                HEAD_CENTER_Y * scale + offsetY,
+                HEAD_HIT_RADIUS_X * scale,
+                HEAD_HIT_RADIUS_Y * scale,
+                BODY_CENTER_X * scale + offsetX,
+                BODY_CENTER_Y * scale + offsetY,
+                BODY_HIT_RADIUS_X * scale,
+                BODY_HIT_RADIUS_Y * scale,
+                BODY_CHEST_BELLY_SPLIT_Y * scale + offsetY,
+                lastTouchViewX,
+                lastTouchViewY,
+                hasLastTouch,
+                lastTouchHitRegion
+        );
+    }
     public float transformViewX(float deviceX) {
         // 論理座標変換した座標を取得
         float screenX = deviceToScreen.transformX(deviceX);
@@ -319,6 +919,10 @@ public class LAppMinimumView implements AutoCloseable {
         return renderingTarget;
     }
 
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private final CubismMatrix44 deviceToScreen = CubismMatrix44.create(); // デバイス座標からスクリーン座標に変換するための行列
     private final CubismViewMatrix viewMatrix = new CubismViewMatrix();   // 画面表示の拡縮や移動の変換を行う行列
 
@@ -337,6 +941,26 @@ public class LAppMinimumView implements AutoCloseable {
     private LAppMinimumSprite renderingSprite;
 
     private final TouchManager touchManager = new TouchManager();
+
+    private float touchStartX;
+    private float touchStartY;
+    private HitRegion touchStartedRegion = HitRegion.NONE;
+    private boolean isHeadPatting;
+    private boolean isBodyStroking;
+    private boolean ignoreHeadGestureThisTouch;
+    private boolean lookStartedThisTouch;
+    private boolean pinchStartedThisTouch;
+    private boolean pinchWaitLoggedThisTouch;
+    private long lastMoveLogMs;
+    private long lastTapTimeMs;
+    private float lastTapX;
+    private float lastTapY;
+    private HitRegion lastTapRegion = HitRegion.NONE;
+    private HitRegionDebugOverlay hitOverlay;
+    private float lastTouchViewX;
+    private float lastTouchViewY;
+    private boolean hasLastTouch;
+    private HitRegion lastTouchHitRegion = HitRegion.NONE;
 
     /**
      * シェーダー作成委譲クラス

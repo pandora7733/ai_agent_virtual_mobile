@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <FrameLayout
+        android:id="@+id/live2d_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/outfit_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:background="@drawable/outfit_panel_bg"
+        android:elevation="8dp"
+        android:padding="8dp"
+        app:selectionRequired="true"
+        app:singleSelection="true">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/outfit_default"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:text="@string/outfit_default" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/outfit_costume"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:text="@string/outfit_costume" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/outfit_jacket_off"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:text="@string/outfit_jacket_off" />
+    </com.google.android.material.button.MaterialButtonToggleGroup>
+</FrameLayout>
