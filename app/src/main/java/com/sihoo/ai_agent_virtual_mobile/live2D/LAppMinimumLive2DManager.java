@@ -7,6 +7,8 @@
 
 package com.sihoo.ai_agent_virtual_mobile.live2D;
 
+import android.util.Log;
+
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismOffscreenManagerAndroid;
 
@@ -321,6 +323,7 @@ public class LAppMinimumLive2DManager {
 
     public boolean onUserActivity() {
         if (currentState == CharacterState.FIRST_VISIT) {
+            Log.d(TOUCH_LOG_TAG, "USER_ACTIVITY ignore gestures state=FIRST_VISIT");
             return true;
         }
 
@@ -334,13 +337,19 @@ public class LAppMinimumLive2DManager {
             LAppMinimumPal.printLog(
                     "[APP] state changed: BORED -> IDLE (user activity)"
             );
+            Log.d(TOUCH_LOG_TAG, "USER_ACTIVITY cancel BORED");
             return true;
         } else if (currentState == CharacterState.SLEEP) {
+            Log.d(TOUCH_LOG_TAG, "USER_ACTIVITY wake SLEEP");
             wakeUpFromSleep("user activity");
             return true;
         }
 
         return false;
+    }
+
+    public CharacterState getCurrentState() {
+        return currentState;
     }
 
     public boolean canStartHeadInteraction() {
@@ -387,6 +396,7 @@ public class LAppMinimumLive2DManager {
             LAppMinimumPal.printLog(
                     "[APP] state changed: IDLE -> HEAD_PAT"
             );
+            Log.d(TOUCH_LOG_TAG, "STATE IDLE -> HEAD_PAT");
         }
 
         if (currentState == CharacterState.HEAD_PAT) {
@@ -396,9 +406,14 @@ public class LAppMinimumLive2DManager {
 
     public void onHeadPatEnd() {
         if (currentState != CharacterState.HEAD_PAT) {
+            Log.d(
+                    TOUCH_LOG_TAG,
+                    "HEAD_PAT_END ignored state=" + currentState
+            );
             return;
         }
 
+        Log.d(TOUCH_LOG_TAG, "HEAD_PAT_END release");
         model.endHeadPatMotion();
     }
 
@@ -414,10 +429,15 @@ public class LAppMinimumLive2DManager {
         LAppMinimumPal.printLog(
                 "[APP] state changed: HEAD_PAT -> IDLE (cancel)"
         );
+        Log.d(TOUCH_LOG_TAG, "STATE HEAD_PAT -> IDLE (cancel)");
     }
 
     public void onHeadDoubleTap() {
         if (model == null || currentState != CharacterState.IDLE) {
+            Log.d(
+                    TOUCH_LOG_TAG,
+                    "HEAD_DOUBLE_TAP ignored state=" + currentState
+            );
             return;
         }
 
@@ -432,6 +452,7 @@ public class LAppMinimumLive2DManager {
         LAppMinimumPal.printLog(
                 "[APP] state changed: IDLE -> HEAD_DOUBLE_TAP"
         );
+        Log.d(TOUCH_LOG_TAG, "STATE IDLE -> HEAD_DOUBLE_TAP");
     }
 
     public void onBodyStroke(float strokeX, float strokeY) {
@@ -466,6 +487,7 @@ public class LAppMinimumLive2DManager {
             LAppMinimumPal.printLog(
                     "[APP] state changed: IDLE -> BODY_STROKE"
             );
+            Log.d(TOUCH_LOG_TAG, "STATE IDLE -> BODY_STROKE");
         }
 
         if (currentState == CharacterState.BODY_STROKE) {
@@ -475,9 +497,14 @@ public class LAppMinimumLive2DManager {
 
     public void onBodyStrokeEnd() {
         if (currentState != CharacterState.BODY_STROKE) {
+            Log.d(
+                    TOUCH_LOG_TAG,
+                    "BODY_STROKE_END ignored state=" + currentState
+            );
             return;
         }
 
+        Log.d(TOUCH_LOG_TAG, "BODY_STROKE_END release");
         model.endBodyStrokeMotion();
     }
 
@@ -493,10 +520,15 @@ public class LAppMinimumLive2DManager {
         LAppMinimumPal.printLog(
                 "[APP] state changed: BODY_STROKE -> IDLE (cancel)"
         );
+        Log.d(TOUCH_LOG_TAG, "STATE BODY_STROKE -> IDLE (cancel)");
     }
 
     public void onBodyDoubleTap() {
         if (model == null || currentState != CharacterState.IDLE) {
+            Log.d(
+                    TOUCH_LOG_TAG,
+                    "BODY_DOUBLE_TAP ignored state=" + currentState
+            );
             return;
         }
 
@@ -511,13 +543,16 @@ public class LAppMinimumLive2DManager {
         LAppMinimumPal.printLog(
                 "[APP] state changed: IDLE -> BODY_DOUBLE_TAP"
         );
+        Log.d(TOUCH_LOG_TAG, "STATE IDLE -> BODY_DOUBLE_TAP");
     }
 
     private void stopBodyInteractionForHead() {
         if (currentState == CharacterState.BODY_STROKE) {
+            Log.d(TOUCH_LOG_TAG, "INTERRUPT BODY_STROKE by HEAD");
             model.stopBodyStrokeMotion();
             currentState = CharacterState.IDLE;
         } else if (currentState == CharacterState.BODY_DOUBLE_TAP) {
+            Log.d(TOUCH_LOG_TAG, "INTERRUPT BODY_DOUBLE_TAP by HEAD");
             model.stopBodyDoubleTapMotion();
             currentState = CharacterState.IDLE;
         }
@@ -525,9 +560,11 @@ public class LAppMinimumLive2DManager {
 
     private void stopHeadInteractionForBody() {
         if (currentState == CharacterState.HEAD_PAT) {
+            Log.d(TOUCH_LOG_TAG, "INTERRUPT HEAD_PAT by BODY");
             model.stopHeadPatMotion();
             currentState = CharacterState.IDLE;
         } else if (currentState == CharacterState.HEAD_DOUBLE_TAP) {
+            Log.d(TOUCH_LOG_TAG, "INTERRUPT HEAD_DOUBLE_TAP by BODY");
             model.stopHeadDoubleTapMotion();
             currentState = CharacterState.IDLE;
         }
@@ -579,6 +616,18 @@ public class LAppMinimumLive2DManager {
 
         cancelHeadPat();
         cancelBodyStroke();
+    }
+
+    public float getUserScale() {
+        return userScale;
+    }
+
+    public float getUserOffsetX() {
+        return userOffsetX;
+    }
+
+    public float getUserOffsetY() {
+        return userOffsetY;
     }
 
     /**
@@ -634,5 +683,6 @@ public class LAppMinimumLive2DManager {
     private static final float BORED_AFTER_SECONDS = 5.0f * 60.0f;
     private static final float SLEEP_AFTER_SECONDS = 8.0f * 60.0f;
     private static final float SLEEP_DURATION_SECONDS = 8.0f * 60.0f;
+    private static final String TOUCH_LOG_TAG = "PetTouch";
 }
 

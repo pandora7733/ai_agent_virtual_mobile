@@ -5,12 +5,17 @@ import android.opengl.GLSurfaceView
 import android.os.Bundle
 import com.sihoo.ai_agent_virtual_mobile.live2D.GLRendererMinimum
 import com.sihoo.ai_agent_virtual_mobile.live2D.LAppMinimumDelegate
+import android.util.Log
 import android.view.MotionEvent
 
 
 class MainActivity : Activity() {
 
     private lateinit var glSurfaceView: GLSurfaceView
+
+    companion object {
+        private const val TOUCH_LOG_TAG = "PetTouch"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,10 +35,21 @@ class MainActivity : Activity() {
 
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
+                        Log.d(
+                            TOUCH_LOG_TAG,
+                            "ACTION_DOWN screen=($x, $y) pointers=${event.pointerCount}"
+                        )
                         queueEvent {
                             LAppMinimumDelegate.getInstance()
                                 .onTouchBegan(x, y)
                         }
+                    }
+
+                    MotionEvent.ACTION_POINTER_DOWN -> {
+                        Log.d(
+                            TOUCH_LOG_TAG,
+                            "ACTION_POINTER_DOWN pointers=${event.pointerCount}"
+                        )
                     }
 
                     MotionEvent.ACTION_MOVE -> {
@@ -55,8 +71,29 @@ class MainActivity : Activity() {
                         }
                     }
 
-                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_POINTER_UP -> {
+                        Log.d(
+                            TOUCH_LOG_TAG,
+                            "ACTION_POINTER_UP pointers=${event.pointerCount}"
+                        )
+                    }
+
+                    MotionEvent.ACTION_UP -> {
+                        Log.d(
+                            TOUCH_LOG_TAG,
+                            "ACTION_UP screen=($x, $y)"
+                        )
+                        queueEvent {
+                            LAppMinimumDelegate.getInstance()
+                                .onTouchEnd(x, y)
+                        }
+                    }
+
                     MotionEvent.ACTION_CANCEL -> {
+                        Log.d(
+                            TOUCH_LOG_TAG,
+                            "ACTION_CANCEL screen=($x, $y)"
+                        )
                         queueEvent {
                             LAppMinimumDelegate.getInstance()
                                 .onTouchEnd(x, y)
