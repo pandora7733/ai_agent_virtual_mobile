@@ -7,6 +7,7 @@ public class PetPreferences {
     private static final String PREF_NAME = "pet_preferences";
     private static final String KEY_FIRST_VISIT_COMPLETED =
             "first_visit_completed";
+    private static final String KEY_OUTFIT = "outfit_type";
 
     private final SharedPreferences preferences;
 
@@ -28,5 +29,28 @@ public class PetPreferences {
         preferences.edit()
                 .putBoolean(KEY_FIRST_VISIT_COMPLETED, true)
                 .apply();
+    }
+
+    public void saveOutfit(LAppMinimumLive2DManager.OutfitType outfitType) {
+        if (outfitType == null) {
+            return;
+        }
+
+        preferences.edit()
+                .putString(KEY_OUTFIT, outfitType.name())
+                .apply();
+    }
+
+    public LAppMinimumLive2DManager.OutfitType getOutfit() {
+        String name = preferences.getString(
+                KEY_OUTFIT,
+                LAppMinimumLive2DManager.OutfitType.DEFAULT.name()
+        );
+
+        try {
+            return LAppMinimumLive2DManager.OutfitType.valueOf(name);
+        } catch (IllegalArgumentException ignored) {
+            return LAppMinimumLive2DManager.OutfitType.DEFAULT;
+        }
     }
 }
