@@ -1,4 +1,4 @@
-package com.sihoo.ai_agent_virtual_mobile.live2D;
+package com.sihoo.ai_agent_virtual_mobile.character;
 
 public enum CharacterState {
     LOADING,

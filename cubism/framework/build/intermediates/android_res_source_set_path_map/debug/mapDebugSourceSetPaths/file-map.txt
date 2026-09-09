@@ -6,4 +6,4 @@ com.live2d.sdk.cubism.framework-debug-4 /home/sihoo/Projects/ai_agent_virtual_mo
 com.live2d.sdk.cubism.framework-debug-5 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/build/intermediates/packaged_res/debug/packageDebugResources
 com.live2d.sdk.cubism.framework-debug-6 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/src/debug/res
 com.live2d.sdk.cubism.framework-main-7 /home/sihoo/Projects/ai_agent_virtual_mobile/cubism/framework/src/main/res
-gradleHome-0 /home/sihoo/.gradle
+gradleHome-0 /tmp/cursor-sandbox-cache/d8eee1d54a08db416b2f81520689f7a0/gradle
