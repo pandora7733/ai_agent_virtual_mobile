@@ -1,20 +1,17 @@
-/*
- * Copyright(c) Live2D Inc. All rights reserved.
- *
- * Use of this source code is governed by the Live2D Open Software license
- * that can be found at http://live2d.com/eula/live2d-open-software-license-agreement_en.html.
- */
-
 package com.sihoo.ai_agent_virtual_mobile.live2D;
 
-import android.util.Log;
-
+import com.sihoo.ai_agent_virtual_mobile.character.CharacterState;
+import com.sihoo.ai_agent_virtual_mobile.character.CharacterStateController;
+import com.sihoo.ai_agent_virtual_mobile.character.CharacterTimings;
+import com.sihoo.ai_agent_virtual_mobile.character.OutfitType;
+import com.sihoo.ai_agent_virtual_mobile.character.PetRepositories;
+import com.sihoo.ai_agent_virtual_mobile.character.PetSession;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismOffscreenManagerAndroid;
 
 /**
- * サンプルアプリケーションにおいてCubismModelを管理するクラス。
- * モデル生成と破棄、タップイベントの処理、モデル切り替えを行う。
+ * Cubism 모델 로드·투영·그리기와 입력 좌표 변환을 담당한다.
+ * 캐릭터 상태 전이는 {@link CharacterStateController}에 위임한다.
  */
 public class LAppMinimumLive2DManager {
     public static LAppMinimumLive2DManager getInstance() {
@@ -24,8 +21,13 @@ public class LAppMinimumLive2DManager {
         return s_instance;
     }
 
+    public static boolean hasInstance() {
+        return s_instance != null;
+    }
+
     public static void releaseInstance() {
         if (s_instance != null) {
+            PetSession.unbind();
             if (s_instance.model != null) {
                 s_instance.model.deleteModel();
                 s_instance.model = null;
@@ -35,106 +37,47 @@ public class LAppMinimumLive2DManager {
         s_instance = null;
     }
 
-    public enum OutfitType{
-        DEFAULT,
-        OUTFIT,
-        JACKET_OFF
-    }
-
     public boolean applyOutfit(OutfitType outfitType) {
-        return applyOutfit(outfitType, false);
+        return characterController.applyOutfit(outfitType);
     }
 
     public boolean applyOutfit(OutfitType outfitType, boolean force) {
-        if (model == null || outfitType == null) {
-            return false;
-        }
-
-        if (!force && outfitType == currentOutfit) {
-            return true;
-        }
-
-        boolean applied;
-        switch (outfitType) {
-            case OUTFIT:
-                applied = model.setExpression("Outfit");
-                break;
-
-            case JACKET_OFF:
-                applied = model.setExpression("JaketOFF");
-                break;
-
-            case DEFAULT:
-                applied = model.clearExpression();
-                break;
-
-            default:
-                return false;
-        }
-
-        if (applied) {
-            currentOutfit = outfitType;
-            if (petPreferences != null) {
-                petPreferences.saveOutfit(outfitType);
-            }
-            Log.d(OUTFIT_LOG_TAG, "apply outfit=" + outfitType);
-        } else {
-            Log.d(OUTFIT_LOG_TAG, "apply outfit failed=" + outfitType);
-        }
-
-        return applied;
+        return characterController.applyOutfit(outfitType, force);
     }
 
     public OutfitType getCurrentOutfit() {
-        return currentOutfit;
+        return characterController.getCurrentOutfit();
     }
 
     public void loadModel(String modelDirectoryName) {
         String dir = modelDirectoryName + "/";
         model = new LAppMinimumModel(dir);
         model.loadAssets(dir, modelDirectoryName + ".model3.json");
-
-        petPreferences = new PetPreferences(
-                LAppMinimumDelegate.getInstance().getActivity()
-        );
-
-        currentOutfit = petPreferences.getOutfit();
-
-        if (petPreferences.isFirstVisit()) {
-            currentState = CharacterState.FIRST_VISIT;
-            model.setIdleEffectsEnabled(false);
-            model.startFirstVisitMotion();
-        } else {
-            currentState = CharacterState.IDLE;
-            model.setIdleEffectsEnabled(true);
-            applyOutfit(currentOutfit, true);
-        }
+        motionPlayer.setModel(model);
+        characterController.onModelReady();
     }
 
-    // モデル更新処理及び描画処理を行う
+    public void onScreenHidden() {
+        characterController.onScreenHidden();
+    }
+
+    public void onScreenShown() {
+        LAppMinimumPal.updateTime();
+        characterController.onScreenShown();
+    }
+
     public void onUpdate() {
         int width = LAppMinimumDelegate.getInstance().getWindowWidth();
         int height = LAppMinimumDelegate.getInstance().getWindowHeight();
         float aspectRatio = (float) width / (float) height;
         float displayRatio = (float) height / (float) width;
 
-        // モデルで使用するオフスクリーン管理の開始処理
         CubismOffscreenManagerAndroid.getInstance().beginFrameProcess();
 
         projection.loadIdentity();
 
-        float canvasRatio = model.getModel().getCanvasHeight() / model.getModel().getCanvasWidth();
-
-//        if (canvasRatio < displayRatio) {
-//            // 横長モデルを幅に合わせて縦方向のスケールを調整
-//            model.getModelMatrix().setWidth(2.0f);
-//            projection.scale(1.0f, aspectRatio);
-//        } else {
-//            // 縦長モデルを高さに合わせて横方向のスケールを調整
-//            model.getModelMatrix().setHeight(2.0f);
-//            projection.scale(1.0f / aspectRatio, 1.0f);
-//        }
-
+        float canvasRatio = model.getModel().getCanvasHeight()
+                / model.getModel().getCanvasWidth();
         final float finalModelSize = 2.0f * userScale;
 
         if (canvasRatio < displayRatio) {
@@ -147,467 +90,89 @@ public class LAppMinimumLive2DManager {
 
         model.getModelMatrix().setPosition(userOffsetX, userOffsetY);
 
-        if (currentState == CharacterState.FIRST_VISIT
-                && petPreferences != null
-                && model.isFirstVisitMotionFinished()) {
-            petPreferences.markFirstVisitCompleted();
+        float deltaTime = Math.max(
+                0.0f,
+                Math.min(LAppMinimumPal.getDeltaTime(), 0.1f)
+        );
+        characterController.update(deltaTime);
 
-            currentState = CharacterState.IDLE;
-            model.setIdleEffectsEnabled(true);
-            applyOutfit(currentOutfit, true);
-
-            LAppMinimumPal.printLog(
-                    "[APP] state changed: FIRST_VISIT -> IDLE"
-            );
-        }
-
-        updateInactivityTimer();
-
-
-
-        // 必要があればここで乗算する
         if (viewMatrix != null) {
             viewMatrix.multiplyByMatrix(projection);
         }
 
-        // 描画前コール
         LAppMinimumDelegate.getInstance().getView().preModelDraw(model);
 
         model.update();
-        model.draw(projection);     // 参照渡しなのでprojectionは変質する
+        model.draw(projection);
 
-        // 描画後コール
         LAppMinimumDelegate.getInstance().getView().postModelDraw(model);
 
-        // モデルで使用するオフスクリーン管理の終了処理
         CubismOffscreenManagerAndroid.getInstance().endFrameProcess();
-        // もし余っているオフスクリーンのリソースを解放したい場合行う処理
         CubismOffscreenManagerAndroid.getInstance().releaseStaleRenderTextures();
     }
 
-    private void updateInactivityTimer() {
-        if (petPreferences == null || model == null) {
-            return;
-        }
-
-        float deltaTime = Math.max(
-                0.0f,
-                Math.min(
-                        LAppMinimumPal.getDeltaTime(),
-                        0.1f
-                )
-        );
-
-        switch (currentState) {
-            case IDLE:
-                inactivityElapsedSeconds += deltaTime;
-
-                if (inactivityElapsedSeconds >= SLEEP_AFTER_SECONDS) {
-                    enterSleep("IDLE");
-                } else if (!boredPlayedForCurrentInactivity
-                        && inactivityElapsedSeconds >= BORED_AFTER_SECONDS) {
-                    if (model.startBoredMotion()) {
-                        boredPlayedForCurrentInactivity = true;
-                        currentState = CharacterState.BORED;
-
-                        LAppMinimumPal.printLog(
-                                "[APP] state changed: IDLE -> BORED"
-                        );
-                    }
-                }
-                break;
-
-            case BORED:
-                inactivityElapsedSeconds += deltaTime;
-
-                if (model.isBoredMotionFinished()) {
-                    if (inactivityElapsedSeconds >= SLEEP_AFTER_SECONDS) {
-                        enterSleep("BORED");
-                    } else {
-                        currentState = CharacterState.IDLE;
-
-                        LAppMinimumPal.printLog(
-                                "[APP] state changed: BORED -> IDLE"
-                        );
-                    }
-                }
-                break;
-
-            case HEAD_PAT:
-            case HEAD_DOUBLE_TAP:
-            case BODY_STROKE:
-            case BODY_DOUBLE_TAP:
-                if (currentState == CharacterState.HEAD_PAT
-                        && model.isHeadPatFinished()) {
-                    currentState = CharacterState.IDLE;
-                    inactivityElapsedSeconds = 0.0f;
-
-                    LAppMinimumPal.printLog(
-                            "[APP] state changed: HEAD_PAT -> IDLE"
-                    );
-                } else if (currentState == CharacterState.HEAD_DOUBLE_TAP
-                        && model.isHeadDoubleTapFinished()) {
-                    currentState = CharacterState.IDLE;
-                    inactivityElapsedSeconds = 0.0f;
-
-                    LAppMinimumPal.printLog(
-                            "[APP] state changed: HEAD_DOUBLE_TAP -> IDLE"
-                    );
-                } else if (currentState == CharacterState.BODY_STROKE
-                        && model.isBodyStrokeFinished()) {
-                    currentState = CharacterState.IDLE;
-                    inactivityElapsedSeconds = 0.0f;
-
-                    LAppMinimumPal.printLog(
-                            "[APP] state changed: BODY_STROKE -> IDLE"
-                    );
-                } else if (currentState == CharacterState.BODY_DOUBLE_TAP
-                        && model.isBodyDoubleTapFinished()) {
-                    currentState = CharacterState.IDLE;
-                    inactivityElapsedSeconds = 0.0f;
-
-                    LAppMinimumPal.printLog(
-                            "[APP] state changed: BODY_DOUBLE_TAP -> IDLE"
-                    );
-                }
-                break;
-
-            case SLEEP_ENTRY:
-                if (model.isSleepEntryFinished()) {
-                    if (model.startSleepLoopMotion()) {
-                        currentState = CharacterState.SLEEP;
-                        sleepElapsedSeconds = 0.0f;
-
-                        LAppMinimumPal.printLog(
-                                "[APP] state changed: SLEEP_ENTRY -> SLEEP"
-                        );
-                    }
-                }
-                break;
-
-            case SLEEP:
-                sleepElapsedSeconds += deltaTime;
-
-                if (sleepElapsedSeconds >= SLEEP_DURATION_SECONDS) {
-                    wakeUpFromSleep("timeout");
-                }
-                break;
-
-            case WAKING:
-                if (model.isWakeMotionFinished()) {
-                    finishWake();
-                }
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    private void enterSleep(String previousStateName) {
-        if (!model.startSleepEntryMotion()) {
-            return;
-        }
-
-        currentState = CharacterState.SLEEP_ENTRY;
-        model.setIdleEffectsEnabled(false);
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: "
-                        + previousStateName
-                        + " -> SLEEP_ENTRY"
-        );
-    }
-
-    private void wakeUpFromSleep(String reason) {
-        if (!model.startWakeMotion()) {
-            return;
-        }
-
-        pendingWakeReason = reason;
-        currentState = CharacterState.WAKING;
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: SLEEP -> WAKING ("
-                        + reason
-                        + ")"
-        );
-    }
-
-    private void finishWake() {
-        model.finishWakeMotion();
-        model.setIdleEffectsEnabled(true);
-
-        currentState = CharacterState.IDLE;
-        inactivityElapsedSeconds = 0.0f;
-        sleepElapsedSeconds = 0.0f;
-        boredPlayedForCurrentInactivity = false;
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: WAKING -> IDLE ("
-                        + pendingWakeReason
-                        + ")"
-        );
-        pendingWakeReason = "";
-    }
-
     public boolean onUserActivity() {
-        if (currentState == CharacterState.FIRST_VISIT) {
-            Log.d(TOUCH_LOG_TAG, "USER_ACTIVITY ignore gestures state=FIRST_VISIT");
-            return true;
-        }
-
-        inactivityElapsedSeconds = 0.0f;
-        boredPlayedForCurrentInactivity = false;
-
-        if (currentState == CharacterState.BORED) {
-            model.stopBoredMotion();
-            currentState = CharacterState.IDLE;
-
-            LAppMinimumPal.printLog(
-                    "[APP] state changed: BORED -> IDLE (user activity)"
-            );
-            Log.d(TOUCH_LOG_TAG, "USER_ACTIVITY cancel BORED");
-            return true;
-        } else if (currentState == CharacterState.SLEEP) {
-            Log.d(TOUCH_LOG_TAG, "USER_ACTIVITY wake SLEEP");
-            wakeUpFromSleep("user activity");
-            return true;
-        }
-
-        return false;
+        return characterController.onUserActivity();
     }
 
     public CharacterState getCurrentState() {
-        return currentState;
+        return characterController.getCurrentState();
     }
 
     public boolean canStartHeadInteraction() {
-        return currentState == CharacterState.IDLE
-                || currentState == CharacterState.HEAD_PAT
-                || currentState == CharacterState.HEAD_DOUBLE_TAP
-                || currentState == CharacterState.BODY_STROKE
-                || currentState == CharacterState.BODY_DOUBLE_TAP;
+        return characterController.canStartInteraction();
     }
 
     public boolean canStartBodyInteraction() {
-        return canStartHeadInteraction();
+        return characterController.canStartInteraction();
     }
 
     public void onHeadPat(float patX, float patY) {
-        if (model == null) {
-            return;
-        }
-
-        stopBodyInteractionForHead();
-
-        if (currentState == CharacterState.HEAD_DOUBLE_TAP) {
-            model.stopHeadDoubleTapMotion();
-            currentState = CharacterState.IDLE;
-        }
-
-        if (currentState == CharacterState.HEAD_PAT
-                && model.isHeadPatReleasing()) {
-            if (!model.startHeadPatMotion()) {
-                return;
-            }
-        }
-
-        if (currentState == CharacterState.IDLE) {
-            if (!model.startHeadPatMotion()) {
-                return;
-            }
-
-            currentState = CharacterState.HEAD_PAT;
-            inactivityElapsedSeconds = 0.0f;
-            boredPlayedForCurrentInactivity = false;
-            model.setIdleEffectsEnabled(true);
-
-            LAppMinimumPal.printLog(
-                    "[APP] state changed: IDLE -> HEAD_PAT"
-            );
-            Log.d(TOUCH_LOG_TAG, "STATE IDLE -> HEAD_PAT");
-        }
-
-        if (currentState == CharacterState.HEAD_PAT) {
-            model.updateHeadPat(patX, patY);
-        }
+        characterController.onHeadPat(patX, patY);
     }
 
     public void onHeadPatEnd() {
-        if (currentState != CharacterState.HEAD_PAT) {
-            Log.d(
-                    TOUCH_LOG_TAG,
-                    "HEAD_PAT_END ignored state=" + currentState
-            );
-            return;
-        }
-
-        Log.d(TOUCH_LOG_TAG, "HEAD_PAT_END release");
-        model.endHeadPatMotion();
+        characterController.onHeadPatEnd();
     }
 
     public void cancelHeadPat() {
-        if (currentState != CharacterState.HEAD_PAT) {
-            return;
-        }
-
-        model.stopHeadPatMotion();
-        currentState = CharacterState.IDLE;
-        inactivityElapsedSeconds = 0.0f;
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: HEAD_PAT -> IDLE (cancel)"
-        );
-        Log.d(TOUCH_LOG_TAG, "STATE HEAD_PAT -> IDLE (cancel)");
+        characterController.cancelHeadPat();
     }
 
     public void onHeadDoubleTap() {
-        if (model == null || currentState != CharacterState.IDLE) {
-            Log.d(
-                    TOUCH_LOG_TAG,
-                    "HEAD_DOUBLE_TAP ignored state=" + currentState
-            );
-            return;
-        }
-
-        if (!model.startHeadDoubleTapMotion()) {
-            return;
-        }
-
-        currentState = CharacterState.HEAD_DOUBLE_TAP;
-        inactivityElapsedSeconds = 0.0f;
-        boredPlayedForCurrentInactivity = false;
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: IDLE -> HEAD_DOUBLE_TAP"
-        );
-        Log.d(TOUCH_LOG_TAG, "STATE IDLE -> HEAD_DOUBLE_TAP");
+        characterController.onHeadDoubleTap();
     }
 
-    public void onBodyStroke(float strokeX, float strokeY) {
-        if (model == null) {
-            return;
-        }
-
-        stopHeadInteractionForBody();
-
-        if (currentState == CharacterState.BODY_DOUBLE_TAP) {
-            model.stopBodyDoubleTapMotion();
-            currentState = CharacterState.IDLE;
-        }
-
-        if (currentState == CharacterState.BODY_STROKE
-                && model.isBodyStrokeReleasing()) {
-            if (!model.startBodyStrokeMotion()) {
-                return;
-            }
-        }
-
-        if (currentState == CharacterState.IDLE) {
-            if (!model.startBodyStrokeMotion()) {
-                return;
-            }
-
-            currentState = CharacterState.BODY_STROKE;
-            inactivityElapsedSeconds = 0.0f;
-            boredPlayedForCurrentInactivity = false;
-            model.setIdleEffectsEnabled(true);
-
-            LAppMinimumPal.printLog(
-                    "[APP] state changed: IDLE -> BODY_STROKE"
-            );
-            Log.d(TOUCH_LOG_TAG, "STATE IDLE -> BODY_STROKE");
-        }
-
-        if (currentState == CharacterState.BODY_STROKE) {
-            model.updateBodyStroke(strokeX, strokeY);
-        }
+    public void onBodyStroke(
+            float strokeX,
+            float strokeY,
+            LAppMinimumView.HitRegion region
+    ) {
+        characterController.onBodyStroke(
+                strokeX,
+                strokeY,
+                region == LAppMinimumView.HitRegion.CHEST
+        );
     }
 
     public void onBodyStrokeEnd() {
-        if (currentState != CharacterState.BODY_STROKE) {
-            Log.d(
-                    TOUCH_LOG_TAG,
-                    "BODY_STROKE_END ignored state=" + currentState
-            );
-            return;
-        }
-
-        Log.d(TOUCH_LOG_TAG, "BODY_STROKE_END release");
-        model.endBodyStrokeMotion();
+        characterController.onBodyStrokeEnd();
     }
 
     public void cancelBodyStroke() {
-        if (currentState != CharacterState.BODY_STROKE) {
-            return;
-        }
+        characterController.cancelBodyStroke();
+    }
 
-        model.stopBodyStrokeMotion();
-        currentState = CharacterState.IDLE;
-        inactivityElapsedSeconds = 0.0f;
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: BODY_STROKE -> IDLE (cancel)"
+    public void onBodyDoubleTap(LAppMinimumView.HitRegion region) {
+        characterController.onBodyDoubleTap(
+                region == LAppMinimumView.HitRegion.CHEST
         );
-        Log.d(TOUCH_LOG_TAG, "STATE BODY_STROKE -> IDLE (cancel)");
     }
 
-    public void onBodyDoubleTap() {
-        if (model == null || currentState != CharacterState.IDLE) {
-            Log.d(
-                    TOUCH_LOG_TAG,
-                    "BODY_DOUBLE_TAP ignored state=" + currentState
-            );
-            return;
-        }
-
-        if (!model.startBodyDoubleTapMotion()) {
-            return;
-        }
-
-        currentState = CharacterState.BODY_DOUBLE_TAP;
-        inactivityElapsedSeconds = 0.0f;
-        boredPlayedForCurrentInactivity = false;
-
-        LAppMinimumPal.printLog(
-                "[APP] state changed: IDLE -> BODY_DOUBLE_TAP"
-        );
-        Log.d(TOUCH_LOG_TAG, "STATE IDLE -> BODY_DOUBLE_TAP");
-    }
-
-    private void stopBodyInteractionForHead() {
-        if (currentState == CharacterState.BODY_STROKE) {
-            Log.d(TOUCH_LOG_TAG, "INTERRUPT BODY_STROKE by HEAD");
-            model.stopBodyStrokeMotion();
-            currentState = CharacterState.IDLE;
-        } else if (currentState == CharacterState.BODY_DOUBLE_TAP) {
-            Log.d(TOUCH_LOG_TAG, "INTERRUPT BODY_DOUBLE_TAP by HEAD");
-            model.stopBodyDoubleTapMotion();
-            currentState = CharacterState.IDLE;
-        }
-    }
-
-    private void stopHeadInteractionForBody() {
-        if (currentState == CharacterState.HEAD_PAT) {
-            Log.d(TOUCH_LOG_TAG, "INTERRUPT HEAD_PAT by BODY");
-            model.stopHeadPatMotion();
-            currentState = CharacterState.IDLE;
-        } else if (currentState == CharacterState.HEAD_DOUBLE_TAP) {
-            Log.d(TOUCH_LOG_TAG, "INTERRUPT HEAD_DOUBLE_TAP by BODY");
-            model.stopHeadDoubleTapMotion();
-            currentState = CharacterState.IDLE;
-        }
-    }
-
-    /**
-     * 画面をドラッグした時の処理
-     *
-     * @param x 画面のx座標
-     * @param y 画面のy座標
-     */
     public void onDrag(float x, float y) {
-        model.setDragging(x, y);
+        if (model != null) {
+            model.setDragging(x, y);
+        }
     }
 
     public void onPinch(
@@ -644,8 +209,13 @@ public class LAppMinimumLive2DManager {
 
         userScale = newScale;
 
-        cancelHeadPat();
-        cancelBodyStroke();
+        characterController.cancelHeadPat();
+        characterController.cancelBodyStroke();
+        characterController.cancelBodyDoubleTap();
+    }
+
+    public void cancelBodyDoubleTap() {
+        characterController.cancelBodyDoubleTap();
     }
 
     public float getUserScale() {
@@ -660,39 +230,32 @@ public class LAppMinimumLive2DManager {
         return userOffsetY;
     }
 
-    /**
-     * 現在のシーンで保持しているモデルを返す
-     *
-     * @param number モデルリストのインデックス値
-     * @return モデルのインスタンスを返す。インデックス値が範囲外の場合はnullを返す
-     */
     public LAppMinimumModel getModel(int number) {
         return model;
     }
 
-    /**
-     * モデルのオフスクリーンのサイズを設定する。
-     *
-     * @param width  ウィンドウの幅
-     * @param height ウィンドウの高さ
-     */
     public void setRenderTargetSize(int width, int height) {
         if (model != null) {
             model.setRenderTargetSize(width, height);
         }
     }
 
-    /**
-     * シングルトンインスタンス
-     */
     private static LAppMinimumLive2DManager s_instance;
 
     private LAppMinimumLive2DManager() {
+        motionPlayer = new Live2DCharacterMotionPlayer();
+        characterController = new CharacterStateController(
+                motionPlayer,
+                PetRepositories.get(),
+                CharacterTimings.defaults()
+        );
+        PetSession.bind(characterController);
         loadModel("Mk6");
     }
 
     private LAppMinimumModel model;
-
+    private final Live2DCharacterMotionPlayer motionPlayer;
+    private final CharacterStateController characterController;
     private final CubismMatrix44 viewMatrix = CubismMatrix44.create();
     private final CubismMatrix44 projection = CubismMatrix44.create();
     private float userScale = 1.0f;
@@ -702,19 +265,4 @@ public class LAppMinimumLive2DManager {
 
     private float userOffsetX = 0.0f;
     private float userOffsetY = 0.0f;
-
-    private CharacterState currentState = CharacterState.LOADING;
-    private OutfitType currentOutfit = OutfitType.DEFAULT;
-    private PetPreferences petPreferences;
-    private float inactivityElapsedSeconds = 0.0f;
-    private float sleepElapsedSeconds = 0.0f;
-    private boolean boredPlayedForCurrentInactivity = false;
-    private String pendingWakeReason = "";
-
-    private static final float BORED_AFTER_SECONDS = 5.0f * 60.0f;
-    private static final float SLEEP_AFTER_SECONDS = 8.0f * 60.0f;
-    private static final float SLEEP_DURATION_SECONDS = 8.0f * 60.0f;
-    private static final String TOUCH_LOG_TAG = "PetTouch";
-    private static final String OUTFIT_LOG_TAG = "Outfit";
 }
-

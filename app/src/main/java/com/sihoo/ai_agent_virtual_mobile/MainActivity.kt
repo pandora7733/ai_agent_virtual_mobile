@@ -1,21 +1,25 @@
 package com.sihoo.ai_agent_virtual_mobile
 
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
 import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.FrameLayout
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.sihoo.ai_agent_virtual_mobile.character.OutfitType
+import com.sihoo.ai_agent_virtual_mobile.character.PetRepositories
+import com.sihoo.ai_agent_virtual_mobile.character.PetSession
 import com.sihoo.ai_agent_virtual_mobile.live2D.GLRendererMinimum
 import com.sihoo.ai_agent_virtual_mobile.live2D.LAppMinimumDelegate
-import com.sihoo.ai_agent_virtual_mobile.live2D.LAppMinimumLive2DManager
-import com.sihoo.ai_agent_virtual_mobile.live2D.PetPreferences
+import com.sihoo.ai_agent_virtual_mobile.ui.MainViewModel
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var glSurfaceView: GLSurfaceView
     private lateinit var outfitToggle: MaterialButtonToggleGroup
+    private lateinit var viewModel: MainViewModel
 
     companion object {
         private const val TOUCH_LOG_TAG = "PetTouch"
@@ -23,6 +27,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        PetRepositories.initialize(this)
+        viewModel = ViewModelProvider(
+            this,
+            MainViewModel.Factory(PetRepositories.get())
+        )[MainViewModel::class.java]
+
         setContentView(R.layout.activity_main)
 
         val live2dContainer = findViewById<FrameLayout>(R.id.live2d_container)
@@ -123,7 +133,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupOutfitToggle() {
-        val savedOutfit = PetPreferences(this).getOutfit()
+        val savedOutfit = viewModel.outfit.value ?: OutfitType.DEFAULT
         outfitToggle.check(buttonIdForOutfit(savedOutfit))
 
         outfitToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -132,29 +142,26 @@ class MainActivity : AppCompatActivity() {
             }
 
             val outfitType = outfitTypeForButton(checkedId) ?: return@addOnButtonCheckedListener
+            viewModel.selectOutfit(outfitType)
             glSurfaceView.queueEvent {
-                LAppMinimumLive2DManager.getInstance().applyOutfit(outfitType)
+                PetSession.applyOutfit(outfitType)
             }
         }
     }
 
-    private fun buttonIdForOutfit(
-        outfitType: LAppMinimumLive2DManager.OutfitType
-    ): Int {
+    private fun buttonIdForOutfit(outfitType: OutfitType): Int {
         return when (outfitType) {
-            LAppMinimumLive2DManager.OutfitType.OUTFIT -> R.id.outfit_costume
-            LAppMinimumLive2DManager.OutfitType.JACKET_OFF -> R.id.outfit_jacket_off
-            LAppMinimumLive2DManager.OutfitType.DEFAULT -> R.id.outfit_default
+            OutfitType.OUTFIT -> R.id.outfit_costume
+            OutfitType.JACKET_OFF -> R.id.outfit_jacket_off
+            OutfitType.DEFAULT -> R.id.outfit_default
         }
     }
 
-    private fun outfitTypeForButton(
-        buttonId: Int
-    ): LAppMinimumLive2DManager.OutfitType? {
+    private fun outfitTypeForButton(buttonId: Int): OutfitType? {
         return when (buttonId) {
-            R.id.outfit_costume -> LAppMinimumLive2DManager.OutfitType.OUTFIT
-            R.id.outfit_jacket_off -> LAppMinimumLive2DManager.OutfitType.JACKET_OFF
-            R.id.outfit_default -> LAppMinimumLive2DManager.OutfitType.DEFAULT
+            R.id.outfit_costume -> OutfitType.OUTFIT
+            R.id.outfit_jacket_off -> OutfitType.JACKET_OFF
+            R.id.outfit_default -> OutfitType.DEFAULT
             else -> null
         }
     }
@@ -177,11 +184,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        LAppMinimumDelegate.getInstance().onStart(this)
+        val delegate = LAppMinimumDelegate.getInstance()
+        delegate.onStart(this)
+        delegate.onScreenShown()
     }
 
     override fun onStop() {
-        LAppMinimumDelegate.getInstance().onStop()
+        if (!isChangingConfigurations) {
+            LAppMinimumDelegate.getInstance().onStop()
+        }
         super.onStop()
     }
 

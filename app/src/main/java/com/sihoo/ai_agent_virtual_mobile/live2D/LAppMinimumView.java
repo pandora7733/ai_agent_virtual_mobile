@@ -378,7 +378,7 @@ public class LAppMinimumView implements AutoCloseable {
                                 + " liveHit=" + liveRegion
                                 + modelSpaceLog(viewX, viewY, localX, localY)
                 );
-                manager.onBodyStroke(strokeX, strokeY);
+                manager.onBodyStroke(strokeX, strokeY, touchStartedRegion);
                 return;
             }
 
@@ -627,7 +627,7 @@ public class LAppMinimumView implements AutoCloseable {
                                 + " liveHit=" + liveRegion
                                 + modelSpaceLog(viewX, viewY, localX, localY)
                 );
-                manager.onBodyDoubleTap();
+                manager.onBodyDoubleTap(touchStartedRegion);
                 lastTapRegion = HitRegion.NONE;
             } else {
                 logTouch(
