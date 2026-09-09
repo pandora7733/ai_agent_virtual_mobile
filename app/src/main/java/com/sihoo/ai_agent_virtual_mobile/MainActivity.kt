@@ -177,11 +177,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        LAppMinimumDelegate.getInstance().onStart(this)
+        val delegate = LAppMinimumDelegate.getInstance()
+        delegate.onStart(this)
+        delegate.onScreenShown()
     }
 
     override fun onStop() {
-        LAppMinimumDelegate.getInstance().onStop()
+        if (!isChangingConfigurations) {
+            LAppMinimumDelegate.getInstance().onStop()
+        }
         super.onStop()
     }
 

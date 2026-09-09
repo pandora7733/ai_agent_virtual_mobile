@@ -50,6 +50,10 @@ public class ParameterTransitionController {
         active = false;
     }
 
+    public void cancel() {
+        active = false;
+    }
+
     public boolean isActive() {
         return active;
     }

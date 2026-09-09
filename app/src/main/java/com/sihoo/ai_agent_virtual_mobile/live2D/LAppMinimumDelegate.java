@@ -38,7 +38,17 @@ public class LAppMinimumDelegate {
         isActive = true;
     }
 
-    public void onStop() {}
+    public void onStop() {
+        if (LAppMinimumLive2DManager.hasInstance()) {
+            LAppMinimumLive2DManager.getInstance().onScreenHidden();
+        }
+    }
+
+    public void onScreenShown() {
+        if (LAppMinimumLive2DManager.hasInstance()) {
+            LAppMinimumLive2DManager.getInstance().onScreenShown();
+        }
+    }
 
     /**
      * GLスレッドから呼び出して、OpenGLおよびCubismリソースを解放する。

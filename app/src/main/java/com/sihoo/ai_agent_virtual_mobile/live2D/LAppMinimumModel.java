@@ -150,8 +150,11 @@ public class LAppMinimumModel extends CubismUserModel {
         // 前回セーブされた状態をロード
         model.loadParameters();
 
+        boolean appearanceActive = isAppearanceMotionActive();
+
         // モーションの再生がない場合、待機モーションの中からランダムで再生する
-        if (!isSleepTransitionActive()
+        if (!appearanceActive
+                && !isSleepTransitionActive()
                 && !isCharacterInteractionActive()
                 && motionManager.isFinished()) {
             final String idleGroup = LAppDefine.MotionGroup.IDLE.getId();
@@ -162,7 +165,9 @@ public class LAppMinimumModel extends CubismUserModel {
                     && modelSetting.getMotionCount(idleGroup) > 0) {
                 startMotion(idleGroup, 0, LAppDefine.Priority.IDLE.getPriority());
             }
-        } else if (!isSleepTransitionActive() && !isCharacterInteractionActive()) {
+        } else if (!appearanceActive
+                && !isSleepTransitionActive()
+                && !isCharacterInteractionActive()) {
             // モーションを更新
             motionUpdated = motionManager.updateMotion(model, deltaTimeSeconds);
         }
@@ -214,11 +219,42 @@ public class LAppMinimumModel extends CubismUserModel {
     }
 
     public void startFirstVisitMotion() {
+        startAppearanceMotion();
+    }
+
+    public void startAppearanceMotion() {
+        motionManager.stopAllMotions();
+        boredMotionController.stop(model);
+        headPatMotionController.stop(model);
+        headDoubleTapMotionController.stop(model);
+        bodyStrokeMotionController.stop(model);
+        bodyDoubleTapMotionController.stop(model);
+        sleepEntryTransition.cancel();
+        wakeTransition.cancel();
+        sleepMotionActive = false;
+        preSleepParameterValues = null;
+        resetToDefaultPose();
         firstVisitMotionController.start(model);
+    }
+
+    public boolean isAppearanceMotionActive() {
+        return firstVisitMotionController.isActive();
     }
 
     public boolean isFirstVisitMotionFinished() {
         return firstVisitMotionController.isFinished();
+    }
+
+    private void resetToDefaultPose() {
+        if (model == null) {
+            return;
+        }
+
+        int parameterCount = model.getParameterCount();
+        for (int i = 0; i < parameterCount; i++) {
+            model.setParameterValue(i, model.getParameterDefaultValue(i));
+        }
+        model.saveParameters();
     }
 
     public boolean startBoredMotion() {

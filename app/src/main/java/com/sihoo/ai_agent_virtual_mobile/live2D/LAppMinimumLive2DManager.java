@@ -24,6 +24,10 @@ public class LAppMinimumLive2DManager {
         return s_instance;
     }
 
+    public static boolean hasInstance() {
+        return s_instance != null;
+    }
+
     public static void releaseInstance() {
         if (s_instance != null) {
             if (s_instance.model != null) {
@@ -99,16 +103,50 @@ public class LAppMinimumLive2DManager {
         );
 
         currentOutfit = petPreferences.getOutfit();
+        playAppearanceMotion("load");
+    }
 
-        if (petPreferences.isFirstVisit()) {
-            currentState = CharacterState.FIRST_VISIT;
-            model.setIdleEffectsEnabled(false);
-            model.startFirstVisitMotion();
-        } else {
-            currentState = CharacterState.IDLE;
-            model.setIdleEffectsEnabled(true);
-            applyOutfit(currentOutfit, true);
+    public void onScreenHidden() {
+        screenWasHidden = true;
+        Log.d(LIFECYCLE_LOG_TAG, "screen hidden state=" + currentState);
+    }
+
+    public void onScreenShown() {
+        if (!screenWasHidden) {
+            return;
         }
+
+        screenWasHidden = false;
+        LAppMinimumPal.updateTime();
+        playAppearanceMotion("visible");
+    }
+
+    private void playAppearanceMotion(String reason) {
+        if (model == null) {
+            return;
+        }
+
+        model.clearExpression();
+        model.setIdleEffectsEnabled(false);
+        model.startAppearanceMotion();
+        applyOutfit(currentOutfit, true);
+
+        currentState = CharacterState.FIRST_VISIT;
+        inactivityElapsedSeconds = 0.0f;
+        sleepElapsedSeconds = 0.0f;
+        boredPlayedForCurrentInactivity = false;
+        pendingWakeReason = "";
+
+        LAppMinimumPal.printLog(
+                "[APP] state changed: -> FIRST_VISIT (" + reason + ")"
+        );
+        Log.d(
+                LIFECYCLE_LOG_TAG,
+                "appearance start reason="
+                        + reason
+                        + " outfit="
+                        + currentOutfit
+        );
     }
 
     // モデル更新処理及び描画処理を行う
@@ -150,15 +188,21 @@ public class LAppMinimumLive2DManager {
         if (currentState == CharacterState.FIRST_VISIT
                 && petPreferences != null
                 && model.isFirstVisitMotionFinished()) {
-            petPreferences.markFirstVisitCompleted();
+            if (petPreferences.isFirstVisit()) {
+                petPreferences.markFirstVisitCompleted();
+            }
 
             currentState = CharacterState.IDLE;
             model.setIdleEffectsEnabled(true);
             applyOutfit(currentOutfit, true);
+            inactivityElapsedSeconds = 0.0f;
+            sleepElapsedSeconds = 0.0f;
+            boredPlayedForCurrentInactivity = false;
 
             LAppMinimumPal.printLog(
                     "[APP] state changed: FIRST_VISIT -> IDLE"
             );
+            Log.d(LIFECYCLE_LOG_TAG, "appearance finished outfit=" + currentOutfit);
         }
 
         updateInactivityTimer();
@@ -755,6 +799,7 @@ public class LAppMinimumLive2DManager {
     private CharacterState currentState = CharacterState.LOADING;
     private OutfitType currentOutfit = OutfitType.DEFAULT;
     private PetPreferences petPreferences;
+    private boolean screenWasHidden = false;
     private float inactivityElapsedSeconds = 0.0f;
     private float sleepElapsedSeconds = 0.0f;
     private boolean boredPlayedForCurrentInactivity = false;
@@ -765,5 +810,6 @@ public class LAppMinimumLive2DManager {
     private static final float SLEEP_DURATION_SECONDS = 8.0f * 60.0f;
     private static final String TOUCH_LOG_TAG = "PetTouch";
     private static final String OUTFIT_LOG_TAG = "Outfit";
+    private static final String LIFECYCLE_LOG_TAG = "PetLifecycle";
 }
 
