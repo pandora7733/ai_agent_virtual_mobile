@@ -21,8 +21,10 @@ import com.live2d.sdk.cubism.framework.model.CubismMoc;
 import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.ACubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
+import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotionManager;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionUpdater;
 import com.live2d.sdk.cubism.framework.motion.CubismLookUpdater;
+import com.live2d.sdk.cubism.framework.motion.CubismUpdateOrder;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismPhysicsUpdater;
 import com.live2d.sdk.cubism.framework.motion.CubismPoseUpdater;
@@ -284,12 +286,16 @@ public class LAppMinimumModel extends CubismUserModel {
     }
 
     public boolean startBodyStrokeMotion() {
+        return startBodyStrokeMotion(false);
+    }
+
+    public boolean startBodyStrokeMotion(boolean chest) {
         motionManager.stopAllMotions();
         boredMotionController.stop(model);
         headPatMotionController.stop(model);
         headDoubleTapMotionController.stop(model);
         bodyDoubleTapMotionController.stop(model);
-        return bodyStrokeMotionController.start(model);
+        return bodyStrokeMotionController.start(model, chest);
     }
 
     public void updateBodyStroke(float strokeX, float strokeY) {
@@ -313,12 +319,16 @@ public class LAppMinimumModel extends CubismUserModel {
     }
 
     public boolean startBodyDoubleTapMotion() {
+        return startBodyDoubleTapMotion(false);
+    }
+
+    public boolean startBodyDoubleTapMotion(boolean chest) {
         motionManager.stopAllMotions();
         boredMotionController.stop(model);
         headPatMotionController.stop(model);
         headDoubleTapMotionController.stop(model);
         bodyStrokeMotionController.stop(model);
-        return bodyDoubleTapMotionController.start(model);
+        return bodyDoubleTapMotionController.start(model, chest);
     }
 
     public void stopBodyDoubleTapMotion() {
@@ -600,9 +610,30 @@ public class LAppMinimumModel extends CubismUserModel {
     }
 
     public boolean setExpression(String expressionName) {
+        return startExpression(expressionManager, expressionName);
+    }
+
+    public boolean clearExpression() {
+        expressionManager.stopAllMotions();
+        return true;
+    }
+
+    public boolean setOutfitExpression(String expressionName) {
+        return startExpression(outfitExpressionManager, expressionName);
+    }
+
+    public boolean clearOutfitExpression() {
+        outfitExpressionManager.stopAllMotions();
+        return true;
+    }
+
+    private boolean startExpression(
+            CubismExpressionMotionManager manager,
+            String expressionName
+    ) {
         ACubismMotion expression = expressions.get(expressionName);
 
-        if (!(expression instanceof CubismExpressionMotion)) {
+        if (!(expression instanceof CubismExpressionMotion) || manager == null) {
             if (LAppDefine.DEBUG_LOG_ENABLE) {
                 CubismFramework.coreLogFunction(
                         "[APP] expression not found: " + expressionName
@@ -611,7 +642,7 @@ public class LAppMinimumModel extends CubismUserModel {
             return false;
         }
 
-        int motionId = expressionManager.startMotionPriority(
+        int motionId = manager.startMotionPriority(
                 expression,
                 LAppDefine.Priority.NORMAL.getPriority()
         );
@@ -626,11 +657,6 @@ public class LAppMinimumModel extends CubismUserModel {
         }
 
         return motionId != -1;
-    }
-
-    public boolean clearExpression() {
-        expressionManager.stopAllMotions();
-        return true;
     }
 
     public void draw(CubismMatrix44 matrix) {
@@ -725,7 +751,18 @@ public class LAppMinimumModel extends CubismUserModel {
                 expressions.put(name, motion);
             }
 
-            updateScheduler.addUpdatableList(new CubismExpressionUpdater(expressionManager));
+            updateScheduler.addUpdatableList(
+                    new CubismExpressionUpdater(
+                            outfitExpressionManager,
+                            CubismUpdateOrder.EXPRESSION.order
+                    )
+            );
+            updateScheduler.addUpdatableList(
+                    new CubismExpressionUpdater(
+                            expressionManager,
+                            CubismUpdateOrder.EXPRESSION.order + 1
+                    )
+            );
         }
 
         // Pose
@@ -966,6 +1003,11 @@ public class LAppMinimumModel extends CubismUserModel {
      * 読み込まれている表情のマップ
      */
     private final Map<String, ACubismMotion> expressions = new HashMap<String, ACubismMotion>();
+    /**
+     * 의상 전용 표정 슬롯. 얼굴 표정과 겹치지 않게 유지한다.
+     */
+    private final CubismExpressionMotionManager outfitExpressionManager =
+            new CubismExpressionMotionManager();
 
     /**
      * パラメーターID: ParamAngleX

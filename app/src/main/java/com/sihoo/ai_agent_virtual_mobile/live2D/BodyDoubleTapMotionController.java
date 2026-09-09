@@ -10,11 +10,6 @@ public class BodyDoubleTapMotionController {
     private static final float FORWARD_END = 0.50f;
     private static final float RETURN_END = 0.85f;
 
-    private static final float RECOIL_BODY_OFFSET = -3.5f;
-    private static final float FORWARD_BODY_OFFSET = 2.5f;
-    private static final float RECOIL_ANGLE_Y = -2.0f;
-    private static final float BLUSH_INTENSITY = 0.15f;
-
     private final CubismId idParamAngleY;
     private final CubismId idParamBodyAngleX;
     private final CubismId idExpFaceBlush;
@@ -24,6 +19,11 @@ public class BodyDoubleTapMotionController {
     private float baseAngleY;
     private float baseBodyAngleX;
     private float baseFaceBlush;
+    private float recoilBodyOffset = -3.5f;
+    private float forwardBodyOffset = 2.5f;
+    private float recoilAngleY = -2.0f;
+    private float blushIntensity = 0.15f;
+    private float wiggleAmplitude = 0.0f;
 
     public BodyDoubleTapMotionController(
             CubismId idParamAngleY,
@@ -36,9 +36,27 @@ public class BodyDoubleTapMotionController {
     }
 
     public boolean start(CubismModel model) {
+        return start(model, false);
+    }
+
+    public boolean start(CubismModel model, boolean chest) {
         if (model == null) {
             active = false;
             return false;
+        }
+
+        if (chest) {
+            recoilBodyOffset = -5.0f;
+            forwardBodyOffset = 1.5f;
+            recoilAngleY = -3.0f;
+            blushIntensity = 0.12f;
+            wiggleAmplitude = 0.0f;
+        } else {
+            recoilBodyOffset = -2.0f;
+            forwardBodyOffset = 4.5f;
+            recoilAngleY = 0.0f;
+            blushIntensity = 0.22f;
+            wiggleAmplitude = 2.2f;
         }
 
         baseAngleY = model.getParameterValue(idParamAngleY);
@@ -81,27 +99,32 @@ public class BodyDoubleTapMotionController {
 
         if (elapsed < RECOIL_END) {
             float t = smoothStep(elapsed / RECOIL_END);
-            bodyOffset = lerp(0.0f, RECOIL_BODY_OFFSET, t);
-            angleYOffset = lerp(0.0f, RECOIL_ANGLE_Y, t);
-            blush = lerp(0.0f, BLUSH_INTENSITY, t);
+            bodyOffset = lerp(0.0f, recoilBodyOffset, t);
+            angleYOffset = lerp(0.0f, recoilAngleY, t);
+            blush = lerp(0.0f, blushIntensity, t);
         } else if (elapsed < FORWARD_END) {
             float t = smoothStep(
                     (elapsed - RECOIL_END) / (FORWARD_END - RECOIL_END)
             );
-            bodyOffset = lerp(RECOIL_BODY_OFFSET, FORWARD_BODY_OFFSET, t);
-            angleYOffset = lerp(RECOIL_ANGLE_Y, 0.0f, t);
-            blush = BLUSH_INTENSITY;
+            bodyOffset = lerp(recoilBodyOffset, forwardBodyOffset, t);
+            angleYOffset = lerp(recoilAngleY, 0.0f, t);
+            blush = blushIntensity;
         } else if (elapsed < RETURN_END) {
             float t = smoothStep(
                     (elapsed - FORWARD_END) / (RETURN_END - FORWARD_END)
             );
-            bodyOffset = lerp(FORWARD_BODY_OFFSET, 0.0f, t);
+            bodyOffset = lerp(forwardBodyOffset, 0.0f, t);
             angleYOffset = 0.0f;
-            blush = lerp(BLUSH_INTENSITY, 0.0f, t);
+            blush = lerp(blushIntensity, 0.0f, t);
         } else {
             bodyOffset = 0.0f;
             angleYOffset = 0.0f;
             blush = 0.0f;
+        }
+
+        if (wiggleAmplitude > 0.0f && elapsed < RETURN_END) {
+            bodyOffset += wiggleAmplitude
+                    * (float) Math.sin(elapsed * Math.PI * 8.0);
         }
 
         model.setParameterValue(

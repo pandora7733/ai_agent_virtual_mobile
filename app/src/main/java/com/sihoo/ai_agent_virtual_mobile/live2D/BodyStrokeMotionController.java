@@ -5,10 +5,6 @@ import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 
 public class BodyStrokeMotionController {
-    private static final float BODY_X_SCALE = 8.0f;
-    private static final float ANGLE_X_SCALE = 3.5f;
-    private static final float ANGLE_Z_SCALE = 2.0f;
-    private static final float BLUSH_INTENSITY = 0.22f;
     private static final float FOLLOW_SPEED = 10.0f;
     private static final float RELEASE_DURATION = 0.4f;
 
@@ -44,6 +40,10 @@ public class BodyStrokeMotionController {
     private float releaseStartAngleZ;
     private float releaseStartBlush;
     private float releaseElapsed;
+    private float bodyXScale = 8.0f;
+    private float angleXScale = 3.5f;
+    private float angleZScale = 2.0f;
+    private float blushIntensity = 0.22f;
 
     public BodyStrokeMotionController(
             CubismId idParamAngleX,
@@ -58,9 +58,25 @@ public class BodyStrokeMotionController {
     }
 
     public boolean start(CubismModel model) {
+        return start(model, false);
+    }
+
+    public boolean start(CubismModel model, boolean chest) {
         if (model == null) {
             active = false;
             return false;
+        }
+
+        if (chest) {
+            bodyXScale = 5.0f;
+            angleXScale = 2.2f;
+            angleZScale = 1.2f;
+            blushIntensity = 0.18f;
+        } else {
+            bodyXScale = 10.0f;
+            angleXScale = 4.5f;
+            angleZScale = 2.8f;
+            blushIntensity = 0.28f;
         }
 
         baseAngleX = model.getParameterValue(idParamAngleX);
@@ -87,9 +103,9 @@ public class BodyStrokeMotionController {
         }
 
         float x = clamp(strokeX, -1.0f, 1.0f);
-        targetBodyX = x * BODY_X_SCALE;
-        targetAngleX = x * ANGLE_X_SCALE;
-        targetAngleZ = x * ANGLE_Z_SCALE;
+        targetBodyX = x * bodyXScale;
+        targetAngleX = x * angleXScale;
+        targetAngleZ = x * angleZScale;
     }
 
     public void startRelease() {
@@ -141,7 +157,7 @@ public class BodyStrokeMotionController {
             currentBodyX = lerp(currentBodyX, targetBodyX, followT);
             currentAngleX = lerp(currentAngleX, targetAngleX, followT);
             currentAngleZ = lerp(currentAngleZ, targetAngleZ, followT);
-            currentBlush = lerp(currentBlush, BLUSH_INTENSITY, followT);
+            currentBlush = lerp(currentBlush, blushIntensity, followT);
         } else {
             releaseElapsed += deltaTimeSeconds;
             float t = smoothStep(releaseElapsed / RELEASE_DURATION);

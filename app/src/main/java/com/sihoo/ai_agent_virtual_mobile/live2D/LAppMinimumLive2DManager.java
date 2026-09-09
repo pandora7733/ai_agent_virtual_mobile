@@ -57,15 +57,15 @@ public class LAppMinimumLive2DManager {
         boolean applied;
         switch (outfitType) {
             case OUTFIT:
-                applied = model.setExpression("Outfit");
+                applied = model.setOutfitExpression("Outfit");
                 break;
 
             case JACKET_OFF:
-                applied = model.setExpression("JaketOFF");
+                applied = model.setOutfitExpression("JaketOFF");
                 break;
 
             case DEFAULT:
-                applied = model.clearExpression();
+                applied = model.clearOutfitExpression();
                 break;
 
             default:
@@ -263,8 +263,7 @@ public class LAppMinimumLive2DManager {
                     );
                 } else if (currentState == CharacterState.BODY_DOUBLE_TAP
                         && model.isBodyDoubleTapFinished()) {
-                    currentState = CharacterState.IDLE;
-                    inactivityElapsedSeconds = 0.0f;
+                    finishBodyDoubleTap("finished");
 
                     LAppMinimumPal.printLog(
                             "[APP] state changed: BODY_DOUBLE_TAP -> IDLE"
@@ -485,7 +484,11 @@ public class LAppMinimumLive2DManager {
         Log.d(TOUCH_LOG_TAG, "STATE IDLE -> HEAD_DOUBLE_TAP");
     }
 
-    public void onBodyStroke(float strokeX, float strokeY) {
+    public void onBodyStroke(
+            float strokeX,
+            float strokeY,
+            LAppMinimumView.HitRegion region
+    ) {
         if (model == null) {
             return;
         }
@@ -493,19 +496,20 @@ public class LAppMinimumLive2DManager {
         stopHeadInteractionForBody();
 
         if (currentState == CharacterState.BODY_DOUBLE_TAP) {
-            model.stopBodyDoubleTapMotion();
-            currentState = CharacterState.IDLE;
+            interruptBodyDoubleTap("stroke");
         }
+
+        boolean chest = isChestRegion(region);
 
         if (currentState == CharacterState.BODY_STROKE
                 && model.isBodyStrokeReleasing()) {
-            if (!model.startBodyStrokeMotion()) {
+            if (!model.startBodyStrokeMotion(chest)) {
                 return;
             }
         }
 
         if (currentState == CharacterState.IDLE) {
-            if (!model.startBodyStrokeMotion()) {
+            if (!model.startBodyStrokeMotion(chest)) {
                 return;
             }
 
@@ -515,9 +519,13 @@ public class LAppMinimumLive2DManager {
             model.setIdleEffectsEnabled(true);
 
             LAppMinimumPal.printLog(
-                    "[APP] state changed: IDLE -> BODY_STROKE"
+                    "[APP] state changed: IDLE -> BODY_STROKE region="
+                            + region
             );
-            Log.d(TOUCH_LOG_TAG, "STATE IDLE -> BODY_STROKE");
+            Log.d(
+                    TOUCH_LOG_TAG,
+                    "STATE IDLE -> BODY_STROKE region=" + region
+            );
         }
 
         if (currentState == CharacterState.BODY_STROKE) {
@@ -553,27 +561,38 @@ public class LAppMinimumLive2DManager {
         Log.d(TOUCH_LOG_TAG, "STATE BODY_STROKE -> IDLE (cancel)");
     }
 
-    public void onBodyDoubleTap() {
+    public void onBodyDoubleTap(LAppMinimumView.HitRegion region) {
         if (model == null || currentState != CharacterState.IDLE) {
             Log.d(
                     TOUCH_LOG_TAG,
                     "BODY_DOUBLE_TAP ignored state=" + currentState
+                            + " region=" + region
             );
             return;
         }
 
-        if (!model.startBodyDoubleTapMotion()) {
+        boolean chest = isChestRegion(region);
+        if (!model.startBodyDoubleTapMotion(chest)) {
             return;
         }
+
+        boolean surprised = model.setExpression("Surprised");
 
         currentState = CharacterState.BODY_DOUBLE_TAP;
         inactivityElapsedSeconds = 0.0f;
         boredPlayedForCurrentInactivity = false;
 
         LAppMinimumPal.printLog(
-                "[APP] state changed: IDLE -> BODY_DOUBLE_TAP"
+                "[APP] state changed: IDLE -> BODY_DOUBLE_TAP region="
+                        + region
         );
-        Log.d(TOUCH_LOG_TAG, "STATE IDLE -> BODY_DOUBLE_TAP");
+        Log.d(
+                TOUCH_LOG_TAG,
+                "STATE IDLE -> BODY_DOUBLE_TAP region="
+                        + region
+                        + " surprised="
+                        + surprised
+        );
     }
 
     private void stopBodyInteractionForHead() {
@@ -583,8 +602,7 @@ public class LAppMinimumLive2DManager {
             currentState = CharacterState.IDLE;
         } else if (currentState == CharacterState.BODY_DOUBLE_TAP) {
             Log.d(TOUCH_LOG_TAG, "INTERRUPT BODY_DOUBLE_TAP by HEAD");
-            model.stopBodyDoubleTapMotion();
-            currentState = CharacterState.IDLE;
+            interruptBodyDoubleTap("head");
         }
     }
 
@@ -646,6 +664,37 @@ public class LAppMinimumLive2DManager {
 
         cancelHeadPat();
         cancelBodyStroke();
+        cancelBodyDoubleTap();
+    }
+
+    public void cancelBodyDoubleTap() {
+        interruptBodyDoubleTap("pinch");
+    }
+
+    private void interruptBodyDoubleTap(String reason) {
+        if (currentState != CharacterState.BODY_DOUBLE_TAP) {
+            return;
+        }
+
+        model.stopBodyDoubleTapMotion();
+        finishBodyDoubleTap(reason);
+    }
+
+    private void finishBodyDoubleTap(String reason) {
+        currentState = CharacterState.IDLE;
+        inactivityElapsedSeconds = 0.0f;
+        model.clearExpression();
+        Log.d(
+                TOUCH_LOG_TAG,
+                "BODY_DOUBLE_TAP end reason="
+                        + reason
+                        + " outfit="
+                        + currentOutfit
+        );
+    }
+
+    private static boolean isChestRegion(LAppMinimumView.HitRegion region) {
+        return region == LAppMinimumView.HitRegion.CHEST;
     }
 
     public float getUserScale() {
